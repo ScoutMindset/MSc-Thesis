@@ -12,48 +12,54 @@
 using namespace std;
 using namespace cv;
 
-//Mat detectMotion(Mat& frame1, Mat& frame2);
+Mat detectMotion(Mat& frame1, Mat& frame2);
 
 int main()
 {
 	VideoCapture capture;
 	capture.open(0);
-	Mat frame;
+	Mat frame, prevFrame, motionMap;
 	namedWindow("Video");
-
+	namedWindow("Difference Image");
+	capture >> frame;
+	prevFrame = frame.clone();
+	waitKey(10);
 	while (1)
 	{
 		capture >> frame;
 		if (!(frame.empty())){
 			imshow("Video", frame);
+			motionMap = detectMotion(prevFrame, frame);
+			imshow("Difference Image", motionMap);
 		}
+		prevFrame = frame.clone();
 		waitKey(10);
-		//cout << frame.rows << " " << frame.cols << " " << capture.isOpened() << std::endl;
+		
 		
 	}
 }
 
-//Mat detectMotion(Mat& frame1, Mat& frame2)
-//{
-//	Mat frame1Gray, frame2Gray;
-//	int rows = frame1.rows;
-//	int cols = frame2.cols;
-//	int difference;
-//	Mat motionMap(rows, cols, CV_8UC1);
-//
-//	cvtColor(frame1, frame1Gray, CV_RGB2GRAY);
-//	cvtColor(frame2, frame2Gray, CV_RGB2GRAY);
-//
-//	for (int i = 0; i < rows; i++)
-//	{
-//		for (int j = 0; j < cols; j++)
-//		{
-//			difference = abs(frame2Gray.at<uchar>(i, j) - frame1Gray.at<uchar>(i, j));
-//			if (difference > 5)
-//				motionMap.at<uchar>(i, j) = 255;
-//			else
-//				motionMap.at<uchar>(i, j) = 0;
-//		}
-//	}
-//	return motionMap;
-//}
+Mat detectMotion(Mat& frame1, Mat& frame2)
+{
+	Mat frame1Gray, frame2Gray;
+	int rows = frame1.rows;
+	int cols = frame2.cols;
+	int difference;
+	Mat motionMap(rows, cols, CV_8UC1);
+
+	cvtColor(frame1, frame1Gray, CV_RGB2GRAY);
+	cvtColor(frame2, frame2Gray, CV_RGB2GRAY);
+
+	for (int i = 0; i < rows; i++)
+	{
+		for (int j = 0; j < cols; j++)
+		{
+			difference = abs(frame2Gray.at<uchar>(i, j) - frame1Gray.at<uchar>(i, j));
+			if (difference > 15)
+				motionMap.at<uchar>(i, j) = 255;
+			else
+				motionMap.at<uchar>(i, j) = 0;
+		}
+	}
+	return motionMap;
+}
