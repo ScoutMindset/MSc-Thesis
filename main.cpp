@@ -27,29 +27,37 @@ Mat detectMotion(Mat& frame1, Mat& frame2, int threshold);
 
 int main()
 {
+	/// VARIABLES
 	VideoCapture capture; /// This variable captures the video stream from the camera.
 	capture.open(0);	/// The video stream variable is initialized with the default ('0') camera device on the PC.
+
+	Mat templateEmpty; /// This image variable contains the video frame WITHOUT the player's body.
+	Mat templatePlayer; /// This image variable contains the video frame WITH the player's body.
 	Mat frame; ///Current frame image variable.
 	Mat prevFrame; 
 	Mat motionMap; /// Image variable that is the result of image detection.
+
 	int threshold = 15;
+
+	/// INITIAL CAMERA OPERATIONS
 	namedWindow("Video");
 	namedWindow("Difference Image");
 	capture >> frame;
 	prevFrame = frame.clone(); /// The previous frame is initialized with the current variable before entering the while loop.
 	waitKey(10);  /// A wait is performed so that the camera has enough time to start working.
+
+	/// PROCESSING LOOP
 	while (1)
 	{
-		capture >> frame;
-		if (!(frame.empty())){
+		capture >> frame; /// Current frame is captured and displayed. WARNING: THIS APPROACH CAUSES THE FIRST VIDEO FRAME TO NOT BE DISPLAYED!
+		if (!(frame.empty())) /// The operations are conducted only if the captured video frame is not empty!
+		{
 			imshow("Video", frame);
 			motionMap = detectMotion(prevFrame, frame,threshold);
 			imshow("Difference Image", motionMap);
+			prevFrame = frame.clone(); /// Current frame is assigned as the previous frame for the next iteration of the 'while' loop.
+			waitKey(10);
 		}
-		prevFrame = frame.clone();
-		waitKey(10);
-		
-		
 	}
 }
 
