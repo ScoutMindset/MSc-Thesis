@@ -35,7 +35,7 @@ int main()
 	VideoCapture capture; /// This variable captures the video stream from the camera.
 	capture.open(0);	/// The video stream variable is initialized with the default ('0') camera device on the PC.
 
-	Mat templateEmpty; /// This image variable contains the video frame WITHOUT the player's body.
+	
 	Mat templatePlayer; /// This image variable contains the video frame WITH the player's body.
 	Mat frame; ///Current frame image variable.
 	Mat prevFrame; 
@@ -45,6 +45,8 @@ int main()
 	int delay = 0;
 	int k = -1;
 
+	bool disablePlayerTemplate = 1;
+
 	signed char input;
 
 	/// INITIAL CAMERA OPERATIONS
@@ -52,13 +54,17 @@ int main()
 	moveWindow("Video", 10, 500);
 	namedWindow("Difference Image");
 	moveWindow("Difference Image", 700, 500);
+
 	capture >> frame;
+	Mat templateEmpty = Mat::zeros(frame.rows, frame.cols, CV_8UC3); /// This image variable contains the video frame WITHOUT the player's body.
 	flip(frame, frame, 1); /// This function causes the mirror-like display of the video from the camera.
 	prevFrame = frame.clone(); /// The previous frame is initialized with the current variable before entering the while loop.
 	waitKey(10);  /// A wait is performed so that the camera has enough time to start working.
+	
 
 	/// PROCESSING LOOP
 	cout << "Press ESCAPE in order to leave the program." << endl;
+
 	while (1)
 	{
 		capture >> frame; /// Current frame is captured and displayed. WARNING: THIS APPROACH CAUSES THE FIRST VIDEO FRAME TO NOT BE DISPLAYED
@@ -68,7 +74,8 @@ int main()
 			flip(frame, frame, 1);
 			imshow("Video", frame);
 			/// MOTION DETECTION BEGINS
-			motionMap = detectMotion(prevFrame, frame, threshold);
+			//motionMap = detectMotion(prevFrame, frame, threshold); //CHANGE SO THAT THE EMPTY TEMPLATE IS SUBTRACTED!!!
+			motionMap = detectMotion(templateEmpty, frame, threshold);
 			imshow("Difference Image", motionMap);
 			prevFrame = frame.clone(); /// Current frame is assigned as the previous frame for the next iteration of the 'while' loop.
 
@@ -85,6 +92,7 @@ int main()
 			{
 				cout << "Please ENTER to capture the frame WITHOUT the body of the player." << endl;
 				k = 0;
+
 			}
 			else if (k == 1)
 			{
@@ -98,11 +106,13 @@ int main()
 			{
 				delay = 50; /// The first instance of ENTER-pressing causes the activation of frame-capturing delay so that the player can leave
 							/// the frame so that frame WITHOUT the player's body is captured.
+				if (disablePlayerTemplate == 1)
+					k = 3;
 
 			}
 			else if ( (input == 13) && (k == 2) )
 			{
-				templatePlayer = frame;
+				templatePlayer = frame.clone();
 				namedWindow("Player template");
 				moveWindow("Player template", 920, 10);
 				imshow("Player template", frame);
@@ -119,7 +129,7 @@ int main()
 				delay--;
 				if (delay == 0)
 				{
-					templateEmpty = frame;
+					templateEmpty = frame.clone();
 					k = 1;
 					namedWindow("Empty template");
 					moveWindow("Empty template", 900, 10);
