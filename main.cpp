@@ -25,7 +25,23 @@ using namespace cv;
 * The difference between the two frames is computed and if it is greater than the specified threshold, the value of that pixel of the motion map
 * is set to 255. Otherwise, it's set to 0.
 */
+
+/// MORPHOLOGICAL VARIABLES
+int morph_elem = 0;
+int morph_size = 0;
+int morph_operator = 0;
+int const max_operator = 4;
+int const max_elem = 2;
+int const max_kernel_size = 21;
+
+///MOTION DETECTION VARIABLES
+Mat motionMap; /// Image variable that is the result of image detection.
+Mat motionMapMorph; /// Image variable that is the result of image detection after morphological operations.
+
+
 Mat detectMotion(Mat& frame1, Mat& frame2, int threshold);
+
+void Morphology_Operations(int, void*);
 
 int main()
 {
@@ -34,16 +50,21 @@ int main()
 	MoveWindow(consoleWindow, 10, 10, 800, 480, FALSE);
 	VideoCapture capture; /// This variable captures the video stream from the camera.
 	capture.open(0);	/// The video stream variable is initialized with the default ('0') camera device on the PC.
-
+	
 	
 	Mat templatePlayer; /// This image variable contains the video frame WITH the player's body.
 	Mat frame; ///Current frame image variable.
 	Mat prevFrame; 
-	Mat motionMap; /// Image variable that is the result of image detection.
+	
+	vector<vector<Point> > contours;
+	Scalar color(0, 0, 255);
+	vector<Vec4i> hierarchy;
 
 	int threshold = 15;
 	int delay = 0;
 	int k = -1;
+
+	const char* window_morph_name = "Difference Image After Morphological Operations";
 
 	bool disablePlayerTemplate = 1;
 
@@ -51,16 +72,33 @@ int main()
 
 	/// INITIAL CAMERA OPERATIONS
 	namedWindow("Video");
-	moveWindow("Video", 10, 500);
+	moveWindow("Video", 10, 400);
 	namedWindow("Difference Image");
-	moveWindow("Difference Image", 700, 500);
+	moveWindow("Difference Image", 600, 400);
 
 	capture >> frame;
-	Mat templateEmpty = Mat::zeros(frame.rows, frame.cols, CV_8UC3); /// This image variable contains the video frame WITHOUT the player's body.
+	Mat templateEmpty = Mat::zeros(frame.size(), CV_8UC3); /// This image variable contains the video frame WITHOUT the player's body.
 	flip(frame, frame, 1); /// This function causes the mirror-like display of the video from the camera.
 	prevFrame = frame.clone(); /// The previous frame is initialized with the current variable before entering the while loop.
 	waitKey(10);  /// A wait is performed so that the camera has enough time to start working.
-	
+
+	/// Create window
+	namedWindow(window_morph_name, WINDOW_AUTOSIZE);
+	moveWindow("Difference Image After Morphological Operations", 1250, 10);
+
+	/// Create Trackbar to select Morphology operation
+	createTrackbar("Operator:\n 0: Opening - 1: Closing  \n 2: Gradient - 3: Top Hat \n 4: Black Hat",
+		window_morph_name, &morph_operator, max_operator, Morphology_Operations);
+
+	/// Create Trackbar to select kernel type
+	createTrackbar("Element:\n 0: Rect - 1: Cross - 2: Ellipse", window_morph_name,
+		&morph_elem, max_elem,
+		Morphology_Operations);
+
+	/// Create Trackbar to choose kernel size
+	createTrackbar("Kernel size:\n 2n +1", window_morph_name,
+		&morph_size, max_kernel_size,
+		Morphology_Operations);
 
 	/// PROCESSING LOOP
 	cout << "Press ESCAPE in order to leave the program." << endl;
@@ -72,20 +110,27 @@ int main()
 		if (!(frame.empty())) /// The operations are conducted only if the captured video frame is not empty!
 		{
 			flip(frame, frame, 1);
-			imshow("Video", frame);
 			/// MOTION DETECTION BEGINS
-			//motionMap = detectMotion(prevFrame, frame, threshold); //CHANGE SO THAT THE EMPTY TEMPLATE IS SUBTRACTED!!!
-			motionMap = detectMotion(templateEmpty, frame, threshold);
+			motionMap = detectMotion(prevFrame, frame, threshold);
+			if (k<1)
+				prevFrame = frame.clone();/// Current frame is assigned as the previous frame for the next iteration of the 'while' loop.
+			Morphology_Operations(0,0);///Morphological operations are done here;
+			imshow("Difference Image", motionMap); ///This shows the difference between the current and previous frames, but after the background template is 
+												   ///captured the difference is computed between the current frame and the frame with just the background.
+			findContours(motionMapMorph, contours, hierarchy, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_SIMPLE, Point(0, 0));///This functions finds the countours in
+																													 ///the motion map after morpological											
+																													 ///operations have been conducted upon it.
+			for (int i = 0; i< contours.size(); i++)
+				drawContours(frame, contours, i, color, 2, 8, hierarchy, 0, Point());
+
+			imshow("Video", frame);
 			imshow("Difference Image", motionMap);
-			prevFrame = frame.clone(); /// Current frame is assigned as the previous frame for the next iteration of the 'while' loop.
+			imshow(window_morph_name, motionMapMorph);
 
 			/// INTERFACE OF FRAME-CAPTURING 
 			/**
 			* k == -1 (the program invites the user to capture the video frame without his/her body)
 			* k == 0  (the program captures the frame without the user's body)
-			* k == 1  (the program invites the user to capture the video frame with his/her body)
-			* k == 2  (the program captures the frame with the user's body)
-			* k == 3  (the program has captured all needed frames and continues with other operations
 			*/
 
 			if (k == -1)
@@ -94,29 +139,14 @@ int main()
 				k = 0;
 
 			}
-			else if (k == 1)
-			{
-				cout << "Please ENTER to capture the frame WITH the body of the player." << endl;
-				k = 2;
-			}
 
 			input = waitKey(30); /// \var input This variable determines whether to capture the frame ("ENTER") or leave the program ("ESCAPE")
 
 			if ( (input == 13) && (k == 0) )
 			{
-				delay = 50; /// The first instance of ENTER-pressing causes the activation of frame-capturing delay so that the player can leave
+				delay = 50; /// The instance of ENTER-pressing causes the activation of frame-capturing delay so that the player can leave
 							/// the frame so that frame WITHOUT the player's body is captured.
-				if (disablePlayerTemplate == 1)
-					k = 3;
 
-			}
-			else if ( (input == 13) && (k == 2) )
-			{
-				templatePlayer = frame.clone();
-				namedWindow("Player template");
-				moveWindow("Player template", 920, 10);
-				imshow("Player template", frame);
-				k = 3;
 			}
 			else if (input == 27)
 				break;
@@ -129,7 +159,7 @@ int main()
 				delay--;
 				if (delay == 0)
 				{
-					templateEmpty = frame.clone();
+					prevFrame = frame.clone(); ///The previous frame is constant from this point and is always equal to the empty background frame.
 					k = 1;
 					namedWindow("Empty template");
 					moveWindow("Empty template", 900, 10);
@@ -167,4 +197,17 @@ Mat detectMotion(Mat& frame1, Mat& frame2, int threshold)
 		}
 	}
 	return motionMap;
+}
+
+void Morphology_Operations(int, void*)
+{
+
+	// Since MORPH_X : 2,3,4,5 and 6
+	int operation = morph_operator + 2;
+
+	Mat element = getStructuringElement(morph_elem, Size(2 * morph_size + 1, 2 * morph_size + 1), Point(morph_size, morph_size));
+
+	/// Apply the specified morphology operation
+	morphologyEx(motionMap, motionMapMorph, operation, element);
+	
 }
