@@ -1,7 +1,9 @@
 /** 
 * @author: Jacek Turula
 * @file main.cpp
-* This program is suppoused to display live video from the camera.
+* This program is suppoused to display live video from the camera. It was written with the help of the following OpenCV tutorials:
+* http://docs.opencv.org/doc/tutorials/imgproc/opening_closing_hats/opening_closing_hats.html
+* http://docs.opencv.org/doc/tutorials/imgproc/shapedescriptors/find_contours/find_contours.html
 */
 
 #include <iostream>
@@ -38,6 +40,10 @@ int const max_kernel_size = 21;
 Mat motionMap; /// Image variable that is the result of image detection.
 Mat motionMapMorph; /// Image variable that is the result of image detection after morphological operations.
 
+///OTHER GLOBAL VARIABLES
+int MAX_KERNEL_LENGTH = 5;
+char filter;
+char smoothing;
 
 Mat detectMotion(Mat& frame1, Mat& frame2, int threshold);
 
@@ -54,8 +60,8 @@ int main()
 	
 	Mat templatePlayer; /// This image variable contains the video frame WITH the player's body.
 	Mat frame; ///Current frame image variable.
+	Mat frameSmooth;
 	Mat prevFrame; 
-	
 	vector<vector<Point> > contours;
 	Scalar color(0, 0, 255);
 	vector<Vec4i> hierarchy;
@@ -64,7 +70,8 @@ int main()
 	int delay = 0;
 	int k = -1;
 
-	const char* window_morph_name = "Difference Image After Morphological Operations";
+
+	string window_morph_name = "Difference Image After Morphological Operations";
 
 	bool disablePlayerTemplate = 1;
 
@@ -79,12 +86,48 @@ int main()
 	capture >> frame;
 	Mat templateEmpty = Mat::zeros(frame.size(), CV_8UC3); /// This image variable contains the video frame WITHOUT the player's body.
 	flip(frame, frame, 1); /// This function causes the mirror-like display of the video from the camera.
-	prevFrame = frame.clone(); /// The previous frame is initialized with the current variable before entering the while loop.
+
 	waitKey(10);  /// A wait is performed so that the camera has enough time to start working.
 
-	/// Create window
+	std::cout << "Please specify if you want to apply smoothing: (y)es or (n)o." << std::endl;
+	std::cin >> smoothing;
+	if (smoothing == 'y')
+	{
+		std::cout << "Please specify which filter you want to apply to the current frame: (h)omogenous, (g)aussian, (m)edian or (b)ilateral." << std::endl;
+		std::cin >> filter;
+	}
+
+	///SMOOTHING OF THE INITIAL FRAME
+	if (smoothing == 'n')
+		prevFrame = frame.clone(); /// The previous frame is initialized with the current variable before entering the while loop.
+	else
+	{
+		if ((filter == 'H') || (filter == 'h'))
+		{
+			for (int i = 1; i < MAX_KERNEL_LENGTH; i = i + 2)
+				blur(frame, prevFrame, Size(i, i), Point(-1, -1));
+		}
+		else if ((filter == 'G') || (filter == 'g'))
+		{
+			for (int i = 1; i < MAX_KERNEL_LENGTH; i = i + 2)
+				GaussianBlur(frame, prevFrame, Size(i, i), 0, 0);
+		}
+		else if ((filter == 'M') || (filter == 'm'))
+		{
+			for (int i = 1; i < MAX_KERNEL_LENGTH; i = i + 2)
+				medianBlur(frame, prevFrame, i);
+		}
+		else if ((filter == 'B') || (filter == 'b'))
+		{
+			for (int i = 1; i < MAX_KERNEL_LENGTH; i = i + 2)
+				bilateralFilter(frame, prevFrame, i, i * 2, i / 2);
+		}
+	}
+	
+
+	/// Create window 
 	namedWindow(window_morph_name, WINDOW_AUTOSIZE);
-	moveWindow("Difference Image After Morphological Operations", 1250, 10);
+	moveWindow(window_morph_name, 1250, 10);
 
 	/// Create Trackbar to select Morphology operation
 	createTrackbar("Operator:\n 0: Opening - 1: Closing  \n 2: Gradient - 3: Top Hat \n 4: Black Hat",
@@ -110,10 +153,45 @@ int main()
 		if (!(frame.empty())) /// The operations are conducted only if the captured video frame is not empty!
 		{
 			flip(frame, frame, 1);
-			/// MOTION DETECTION BEGINS
-			motionMap = detectMotion(prevFrame, frame, threshold);
-			if (k<1)
-				prevFrame = frame.clone();/// Current frame is assigned as the previous frame for the next iteration of the 'while' loop.
+
+			if (smoothing == 'y')
+			{
+				///SMOOTHING OF THE CURRENT FRAME
+				if ((filter == 'H') || (filter == 'h'))
+				{
+					for (int i = 1; i < MAX_KERNEL_LENGTH; i = i + 2)
+						blur(frame, frameSmooth, Size(i, i), Point(-1, -1));
+				}
+				else if ((filter == 'G') || (filter == 'g'))
+				{
+					for (int i = 1; i < MAX_KERNEL_LENGTH; i = i + 2)
+						GaussianBlur(frame, frameSmooth, Size(i, i), 0, 0);
+				}
+				else if ((filter == 'M') || (filter == 'm'))
+				{
+					for (int i = 1; i < MAX_KERNEL_LENGTH; i = i + 2)
+						medianBlur(frame, frameSmooth, i);
+				}
+				else if ((filter == 'B') || (filter == 'b'))
+				{
+					for (int i = 1; i < MAX_KERNEL_LENGTH; i = i + 2)
+						bilateralFilter(frame, frameSmooth, i, i * 2, i / 2);
+				}
+				/// MOTION DETECTION BEGINS
+				motionMap = detectMotion(prevFrame, frameSmooth, threshold);
+				if (k<1)
+					prevFrame = frameSmooth.clone();/// Current frame is assigned as the previous frame for the next iteration of the 'while' loop.
+			}
+			else
+			{
+				/// MOTION DETECTION BEGINS
+				motionMap = detectMotion(prevFrame, frame, threshold);
+				if (k < 1)
+					prevFrame = frame.clone();/// Current frame is assigned as the previous frame for the next iteration of the 'while' loop.
+
+			}		
+			
+			
 			Morphology_Operations(0,0);///Morphological operations are done here;
 			imshow("Difference Image", motionMap); ///This shows the difference between the current and previous frames, but after the background template is 
 												   ///captured the difference is computed between the current frame and the frame with just the background.
@@ -122,7 +200,6 @@ int main()
 																													 ///operations have been conducted upon it.
 			for (int i = 0; i< contours.size(); i++)
 				drawContours(frame, contours, i, color, 2, 8, hierarchy, 0, Point());
-
 			imshow("Video", frame);
 			imshow("Difference Image", motionMap);
 			imshow(window_morph_name, motionMapMorph);
@@ -135,7 +212,7 @@ int main()
 
 			if (k == -1)
 			{
-				cout << "Please ENTER to capture the frame WITHOUT the body of the player." << endl;
+				cout << "Please ENTER and remove yourself from the frame to capture the frame with the background ONLY." << endl;
 				k = 0;
 
 			}
@@ -159,7 +236,10 @@ int main()
 				delay--;
 				if (delay == 0)
 				{
-					prevFrame = frame.clone(); ///The previous frame is constant from this point and is always equal to the empty background frame.
+					if (smoothing == 'y')
+						prevFrame = frameSmooth.clone();
+					else
+						prevFrame = frame.clone(); ///The previous frame is constant from this point and is always equal to the empty background frame.
 					k = 1;
 					namedWindow("Empty template");
 					moveWindow("Empty template", 900, 10);
