@@ -1,4 +1,4 @@
-/** 
+/**
 * @author: Jacek Turula
 * @file main.cpp
 * This program is suppoused to display live video from the camera. It was written with the help of the following OpenCV tutorials:
@@ -6,13 +6,22 @@
 * http://docs.opencv.org/doc/tutorials/imgproc/shapedescriptors/find_contours/find_contours.html
 */
 
-#include <iostream>
+#include < stdio.h>  
+#include < iostream>  
+
+#include < opencv2\opencv.hpp>  
+#include < opencv2/core/core.hpp>  
+#include < opencv2/video/tracking.hpp>
+#include < opencv2/highgui/highgui.hpp>  
+#include < opencv2/video/background_segm.hpp>  
+
 
 #include <windows.h>
 
-#include <opencv2/core/core.hpp>
-#include <opencv2/highgui/highgui.hpp>
-#include <opencv2/video/tracking.hpp>
+#include <time.h>
+
+
+
 
 using namespace std;
 using namespace cv;
@@ -41,7 +50,7 @@ Mat motionMap; /// Image variable that is the result of image detection.
 Mat motionMapMorph; /// Image variable that is the result of image detection after morphological operations.
 
 ///OTHER GLOBAL VARIABLES
-int MAX_KERNEL_LENGTH = 5;
+int MAX_KERNEL_LENGTH = 10;
 char filter;
 char smoothing;
 
@@ -56,12 +65,12 @@ int main()
 	MoveWindow(consoleWindow, 10, 10, 800, 480, FALSE);
 	VideoCapture capture; /// This variable captures the video stream from the camera.
 	capture.open(0);	/// The video stream variable is initialized with the default ('0') camera device on the PC.
-	
-	
+	Ptr <BackgroundSubtractor> detectPlayer = new BackgroundSubtractorMOG();
+
 	Mat templatePlayer; /// This image variable contains the video frame WITH the player's body.
 	Mat frame; ///Current frame image variable.
 	Mat frameSmooth;
-	Mat prevFrame; 
+	Mat prevFrame;
 	vector<vector<Point> > contours;
 	Scalar color(0, 0, 255);
 	vector<Vec4i> hierarchy;
@@ -69,6 +78,10 @@ int main()
 	int threshold = 15;
 	int delay = 0;
 	int k = -1;
+	int clockIterator = 0;
+
+	clock_t t;
+	clock_t sum=0;
 
 
 	string window_morph_name = "Difference Image After Morphological Operations";
@@ -123,7 +136,7 @@ int main()
 				bilateralFilter(frame, prevFrame, i, i * 2, i / 2);
 		}
 	}
-	
+
 
 	/// Create window 
 	namedWindow(window_morph_name, WINDOW_AUTOSIZE);
@@ -148,14 +161,16 @@ int main()
 
 	while (1)
 	{
+		
 		capture >> frame; /// Current frame is captured and displayed. WARNING: THIS APPROACH CAUSES THE FIRST VIDEO FRAME TO NOT BE DISPLAYED
-						  /// BECAUSE THE FIRST FRAME IS CAPTURED OUTSIDE OF THE WHILE LOOP!
+		/// BECAUSE THE FIRST FRAME IS CAPTURED OUTSIDE OF THE WHILE LOOP!
 		if (!(frame.empty())) /// The operations are conducted only if the captured video frame is not empty!
 		{
 			flip(frame, frame, 1);
 
 			if (smoothing == 'y')
 			{
+				t = clock();
 				///SMOOTHING OF THE CURRENT FRAME
 				if ((filter == 'H') || (filter == 'h'))
 				{
@@ -177,7 +192,19 @@ int main()
 					for (int i = 1; i < MAX_KERNEL_LENGTH; i = i + 2)
 						bilateralFilter(frame, frameSmooth, i, i * 2, i / 2);
 				}
+
+				t = clock() - t;
+				sum += t;
+				if (clockIterator == 100)
+				{
+					std::cout << "Average time of smoothing per frame is: " << double(sum) / (CLOCKS_PER_SEC * 100) << " seconds" << std::endl;
+					sum = 0;
+					clockIterator = 0;
+				}
+				clockIterator++;
+
 				/// MOTION DETECTION BEGINS
+				t = clock();
 				motionMap = detectMotion(prevFrame, frameSmooth, threshold);
 				if (k<1)
 					prevFrame = frameSmooth.clone();/// Current frame is assigned as the previous frame for the next iteration of the 'while' loop.
@@ -185,25 +212,24 @@ int main()
 			else
 			{
 				/// MOTION DETECTION BEGINS
+				t = clock();
 				motionMap = detectMotion(prevFrame, frame, threshold);
 				if (k < 1)
 					prevFrame = frame.clone();/// Current frame is assigned as the previous frame for the next iteration of the 'while' loop.
 
-			}		
-			
-			
-			Morphology_Operations(0,0);///Morphological operations are done here;
-			imshow("Difference Image", motionMap); ///This shows the difference between the current and previous frames, but after the background template is 
-												   ///captured the difference is computed between the current frame and the frame with just the background.
-			findContours(motionMapMorph, contours, hierarchy, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_SIMPLE, Point(0, 0));///This functions finds the countours in
-																													 ///the motion map after morpological											
-																													 ///operations have been conducted upon it.
-			for (int i = 0; i< contours.size(); i++)
-				drawContours(frame, contours, i, color, 2, 8, hierarchy, 0, Point());
-			imshow("Video", frame);
-			imshow("Difference Image", motionMap);
-			imshow(window_morph_name, motionMapMorph);
+			}
 
+			if (clockIterator == 100)
+			{
+				t = clock() - t;
+				std::cout << "Time of detecting motion per frame is: " << double(t) / (CLOCKS_PER_SEC) << " seconds" << std::endl;
+			}
+
+
+			Morphology_Operations(0, 0);///Morphological operations are done here;
+			imshow("Difference Image", motionMap); ///This shows the difference between the current and previous frames, but after the background template is 
+			///captured the difference is computed between the current frame and the frame with just the background.
+			
 			/// INTERFACE OF FRAME-CAPTURING 
 			/**
 			* k == -1 (the program invites the user to capture the video frame without his/her body)
@@ -219,34 +245,50 @@ int main()
 
 			input = waitKey(30); /// \var input This variable determines whether to capture the frame ("ENTER") or leave the program ("ESCAPE")
 
-			if ( (input == 13) && (k == 0) )
+			if ((input == 13) && (k == 0))
 			{
 				delay = 50; /// The instance of ENTER-pressing causes the activation of frame-capturing delay so that the player can leave
-							/// the frame so that frame WITHOUT the player's body is captured.
+				/// the frame so that frame WITHOUT the player's body is captured.
 
 			}
 			else if (input == 27)
 				break;
 
 			if (delay != 0) /// This part of the code is responsible for the countdown that allows the user to remove her/himself from the frame.
-							/// WARNING: THIS COUNTDOWN IS NOT IN SECONDS AND DEPENDS ON HOW FAST THE REST OF THE WHILE LOOP IS EXECUTED!
+				/// WARNING: THIS COUNTDOWN IS NOT IN SECONDS AND DEPENDS ON HOW FAST THE REST OF THE WHILE LOOP IS EXECUTED!
 			{
-				if ((delay % 10) == 0 )
-					cout << delay/10 << endl;
+				if ((delay % 10) == 0)
+					cout << delay / 10 << endl;
 				delay--;
 				if (delay == 0)
 				{
-					if (smoothing == 'y')
-						prevFrame = frameSmooth.clone();
-					else
-						prevFrame = frame.clone(); ///The previous frame is constant from this point and is always equal to the empty background frame.
+					//if (smoothing == 'y')
+						//prevFrame = frameSmooth.clone();
+					//else
+						//prevFrame = frame.clone(); ///The previous frame is constant from this point and is always equal to the empty background frame.
 					k = 1;
 					namedWindow("Empty template");
 					moveWindow("Empty template", 900, 10);
 					imshow("Empty template", frame);
 				}
 			}
+			imshow("Difference Image", motionMap);
+			imshow(window_morph_name, motionMapMorph);
+			findContours(motionMapMorph, contours, hierarchy, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_SIMPLE, Point(0, 0));///This functions finds the countours in
+			///the motion map after morpological											
+			///operations have been conducted upon it.
+			/// CV_RETR_EXTERNAL
+			/// CV_RETR_LIST
+			/// CV_RETR_CCOMP
+			/// CV_RETR_TREE
+
+
+			for (int i = 0; i< contours.size(); i++)
+				drawContours(frame, contours, i, color, 2, 8, hierarchy, 0, Point());
+			imshow("Video", frame);
+
 		}
+
 	}
 	return 0;
 }
@@ -259,10 +301,10 @@ Mat detectMotion(Mat& frame1, Mat& frame2, int threshold)
 	int difference;
 
 	Mat motionMap(rows, cols, CV_8UC1); /// The difference image is initialized with the same amount of rows and columns as the function's frames.
-										/// 
+	/// 
 
 	cvtColor(frame1, frame1Gray, CV_RGB2GRAY); /// Both previous and current frames are converted to the Grayscale color space so that the
-											   /// computation of differential image is faster.
+	/// computation of differential image is faster.
 	cvtColor(frame2, frame2Gray, CV_RGB2GRAY);
 
 	for (int i = 0; i < rows; i++)
@@ -270,10 +312,14 @@ Mat detectMotion(Mat& frame1, Mat& frame2, int threshold)
 		for (int j = 0; j < cols; j++)
 		{
 			difference = abs(frame2Gray.at<uchar>(i, j) - frame1Gray.at<uchar>(i, j));
+			//difference = 0.33*(abs(frame2.at<Vec3b>(i, j)[0] - frame1.at<Vec3b>(i, j)[0]) + 
+				//			   abs(frame2.at<Vec3b>(i, j)[1] - frame1.at<Vec3b>(i, j)[1]) + abs(frame2.at<Vec3b>(i, j)[2] - frame1.at<Vec3b>(i, j)[2]));
 			if (difference > threshold)
 				motionMap.at<uchar>(i, j) = 255;
 			else
+			{
 				motionMap.at<uchar>(i, j) = 0;
+			}
 		}
 	}
 	return motionMap;
@@ -289,5 +335,11 @@ void Morphology_Operations(int, void*)
 
 	/// Apply the specified morphology operation
 	morphologyEx(motionMap, motionMapMorph, operation, element);
-	
+
 }
+
+
+
+
+
+
