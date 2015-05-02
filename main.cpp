@@ -50,7 +50,7 @@ Mat motionMap; /// Image variable that is the result of image detection.
 Mat motionMapMorph; /// Image variable that is the result of image detection after morphological operations.
 
 ///OTHER GLOBAL VARIABLES
-int MAX_KERNEL_LENGTH = 10;
+int MAX_KERNEL_LENGTH = 15;
 char filter;
 char smoothing;
 
@@ -70,6 +70,7 @@ int main()
 	Mat templatePlayer; /// This image variable contains the video frame WITH the player's body.
 	Mat frame; ///Current frame image variable.
 	Mat frameSmooth;
+	Mat frameSmall;
 	Mat prevFrame;
 	vector<vector<Point> > contours;
 	Scalar color(0, 0, 255);
@@ -97,9 +98,10 @@ int main()
 	moveWindow("Difference Image", 600, 400);
 
 	capture >> frame;
+	
 	Mat templateEmpty = Mat::zeros(frame.size(), CV_8UC3); /// This image variable contains the video frame WITHOUT the player's body.
 	flip(frame, frame, 1); /// This function causes the mirror-like display of the video from the camera.
-
+	resize(frame, frameSmall, Size(frame.size().width / 4, frame.size().height / 4));
 	waitKey(10);  /// A wait is performed so that the camera has enough time to start working.
 
 	std::cout << "Please specify if you want to apply smoothing: (y)es or (n)o." << std::endl;
@@ -118,22 +120,22 @@ int main()
 		if ((filter == 'H') || (filter == 'h'))
 		{
 			for (int i = 1; i < MAX_KERNEL_LENGTH; i = i + 2)
-				blur(frame, prevFrame, Size(i, i), Point(-1, -1));
+				blur(frameSmall, prevFrame, Size(i, i), Point(-1, -1));
 		}
 		else if ((filter == 'G') || (filter == 'g'))
 		{
 			for (int i = 1; i < MAX_KERNEL_LENGTH; i = i + 2)
-				GaussianBlur(frame, prevFrame, Size(i, i), 0, 0);
+				GaussianBlur(frameSmall, prevFrame, Size(i, i), 0, 0);
 		}
 		else if ((filter == 'M') || (filter == 'm'))
 		{
 			for (int i = 1; i < MAX_KERNEL_LENGTH; i = i + 2)
-				medianBlur(frame, prevFrame, i);
+				medianBlur(frameSmall, prevFrame, i);
 		}
 		else if ((filter == 'B') || (filter == 'b'))
 		{
 			for (int i = 1; i < MAX_KERNEL_LENGTH; i = i + 2)
-				bilateralFilter(frame, prevFrame, i, i * 2, i / 2);
+				bilateralFilter(frameSmall, prevFrame, i, i * 2, i / 2);
 		}
 	}
 
@@ -144,15 +146,15 @@ int main()
 
 	/// Create Trackbar to select Morphology operation
 	createTrackbar("Operator:\n 0: Opening - 1: Closing  \n 2: Gradient - 3: Top Hat \n 4: Black Hat",
-		window_morph_name, &morph_operator, max_operator, Morphology_Operations);
+		"Video", &morph_operator, max_operator, Morphology_Operations);
 
 	/// Create Trackbar to select kernel type
-	createTrackbar("Element:\n 0: Rect - 1: Cross - 2: Ellipse", window_morph_name,
+	createTrackbar("Element:\n 0: Rect - 1: Cross - 2: Ellipse", "Video",
 		&morph_elem, max_elem,
 		Morphology_Operations);
 
 	/// Create Trackbar to choose kernel size
-	createTrackbar("Kernel size:\n 2n +1", window_morph_name,
+	createTrackbar("Kernel size:\n 2n +1", "Video",
 		&morph_size, max_kernel_size,
 		Morphology_Operations);
 
@@ -164,10 +166,11 @@ int main()
 		
 		capture >> frame; /// Current frame is captured and displayed. WARNING: THIS APPROACH CAUSES THE FIRST VIDEO FRAME TO NOT BE DISPLAYED
 		/// BECAUSE THE FIRST FRAME IS CAPTURED OUTSIDE OF THE WHILE LOOP!
+		
 		if (!(frame.empty())) /// The operations are conducted only if the captured video frame is not empty!
 		{
 			flip(frame, frame, 1);
-
+			resize(frame, frameSmall, Size(frame.size().width / 4, frame.size().height / 4));
 			if (smoothing == 'y')
 			{
 				t = clock();
@@ -175,22 +178,22 @@ int main()
 				if ((filter == 'H') || (filter == 'h'))
 				{
 					for (int i = 1; i < MAX_KERNEL_LENGTH; i = i + 2)
-						blur(frame, frameSmooth, Size(i, i), Point(-1, -1));
+						blur(frameSmall, frameSmooth, Size(i, i), Point(-1, -1));
 				}
 				else if ((filter == 'G') || (filter == 'g'))
 				{
 					for (int i = 1; i < MAX_KERNEL_LENGTH; i = i + 2)
-						GaussianBlur(frame, frameSmooth, Size(i, i), 0, 0);
+						GaussianBlur(frameSmall, frameSmooth, Size(i, i), 0, 0);
 				}
 				else if ((filter == 'M') || (filter == 'm'))
 				{
 					for (int i = 1; i < MAX_KERNEL_LENGTH; i = i + 2)
-						medianBlur(frame, frameSmooth, i);
+						medianBlur(frameSmall, frameSmooth, i);
 				}
 				else if ((filter == 'B') || (filter == 'b'))
 				{
 					for (int i = 1; i < MAX_KERNEL_LENGTH; i = i + 2)
-						bilateralFilter(frame, frameSmooth, i, i * 2, i / 2);
+						bilateralFilter(frameSmall, frameSmooth, i, i * 2, i / 2);
 				}
 
 				t = clock() - t;
@@ -207,15 +210,15 @@ int main()
 				t = clock();
 				motionMap = detectMotion(prevFrame, frameSmooth, threshold);
 				if (k<1)
-					prevFrame = frameSmooth.clone();/// Current frame is assigned as the previous frame for the next iteration of the 'while' loop.
+					cvtColor(frameSmooth, prevFrame, CV_RGB2GRAY);/// Current frame is assigned as the previous frame for the next iteration of the 'while' loop.
 			}
 			else
 			{
 				/// MOTION DETECTION BEGINS
 				t = clock();
-				motionMap = detectMotion(prevFrame, frame, threshold);
+				motionMap = detectMotion(prevFrame, frameSmall, threshold);
 				if (k < 1)
-					prevFrame = frame.clone();/// Current frame is assigned as the previous frame for the next iteration of the 'while' loop.
+					cvtColor(frameSmall,prevFrame,CV_RGB2GRAY);/// Current frame is assigned as the previous frame for the next iteration of the 'while' loop.
 
 			}
 
@@ -227,7 +230,7 @@ int main()
 
 
 			Morphology_Operations(0, 0);///Morphological operations are done here;
-			imshow("Difference Image", motionMap); ///This shows the difference between the current and previous frames, but after the background template is 
+			//imshow("Difference Image", motionMap); ///This shows the difference between the current and previous frames, but after the background template is 
 			///captured the difference is computed between the current frame and the frame with just the background.
 			
 			/// INTERFACE OF FRAME-CAPTURING 
@@ -272,8 +275,9 @@ int main()
 					imshow("Empty template", frame);
 				}
 			}
-			imshow("Difference Image", motionMap);
-			imshow(window_morph_name, motionMapMorph);
+			//imshow("Difference Image", motionMap);
+			//imshow(window_morph_name, motionMapMorph);
+			resize(motionMapMorph, motionMapMorph, Size(4 * motionMapMorph.size().width, 4 * motionMapMorph.size().height));
 			findContours(motionMapMorph, contours, hierarchy, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_SIMPLE, Point(0, 0));///This functions finds the countours in
 			///the motion map after morpological											
 			///operations have been conducted upon it.
@@ -295,7 +299,7 @@ int main()
 
 Mat detectMotion(Mat& frame1, Mat& frame2, int threshold)
 {
-	Mat frame1Gray, frame2Gray;
+	Mat  frame2Gray;
 	int rows = frame1.rows;
 	int cols = frame2.cols;
 	int difference;
@@ -303,7 +307,7 @@ Mat detectMotion(Mat& frame1, Mat& frame2, int threshold)
 	Mat motionMap(rows, cols, CV_8UC1); /// The difference image is initialized with the same amount of rows and columns as the function's frames.
 	/// 
 
-	cvtColor(frame1, frame1Gray, CV_RGB2GRAY); /// Both previous and current frames are converted to the Grayscale color space so that the
+	//cvtColor(frame1, frame1Gray, CV_RGB2GRAY); /// Both previous and current frames are converted to the Grayscale color space so that the
 	/// computation of differential image is faster.
 	cvtColor(frame2, frame2Gray, CV_RGB2GRAY);
 
@@ -311,7 +315,7 @@ Mat detectMotion(Mat& frame1, Mat& frame2, int threshold)
 	{
 		for (int j = 0; j < cols; j++)
 		{
-			difference = abs(frame2Gray.at<uchar>(i, j) - frame1Gray.at<uchar>(i, j));
+			difference = abs(frame2Gray.at<uchar>(i, j) - frame1.at<uchar>(i, j));
 			//difference = 0.33*(abs(frame2.at<Vec3b>(i, j)[0] - frame1.at<Vec3b>(i, j)[0]) + 
 				//			   abs(frame2.at<Vec3b>(i, j)[1] - frame1.at<Vec3b>(i, j)[1]) + abs(frame2.at<Vec3b>(i, j)[2] - frame1.at<Vec3b>(i, j)[2]));
 			if (difference > threshold)
