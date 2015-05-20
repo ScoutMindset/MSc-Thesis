@@ -1,11 +1,25 @@
-﻿Build started 20/05/2015 11:37:35.
+﻿Build started 20/05/2015 11:57:28.
      1>Project "C:\Users\jatur_000\documents\visual studio 2013\Projects\displayCameraImage\displayCameraImage\displayCameraImage.vcxproj" on node 2 (Build target(s)).
      1>ClCompile:
-         C:\Program Files (x86)\MicrosoftVisualStudio 12.0\VC\bin\CL.exe /c /I"C:\Program Files (x86)\glm-0.9.6.3\\" /I"C:\Program Files (x86)\glew-1.12.0_binaries\include" /I"C:\Program Files (x86)\glfw-3.1.1.bin.WIN32\include" /ZI /nologo /W3 /WX- /Od /Oy- /D WIN32 /D _DEBUG /D _CONSOLE /D _LIB /D _UNICODE /D UNICODE /Gm /EHsc /RTC1 /MDd /GS /fp:precise /Zc:wchar_t /Zc:forScope /Fo"Debug\\" /Fd"Debug\vc120.pdb" /Gd /TP /analyze- /errorReport:prompt game.cpp
+         C:\Program Files (x86)\MicrosoftVisualStudio 12.0\VC\bin\CL.exe /c /I"C:\Program Files (x86)\glm-0.9.6.3\\" /I"C:\Program Files (x86)\glew-1.12.0_binaries\include" /I"C:\Program Files (x86)\glfw-3.1.1.bin.WIN32\include" /ZI /nologo /W3 /WX- /Od /Oy- /D WIN32 /D _DEBUG /D _CONSOLE /D _LIB /D _UNICODE /D UNICODE /Gm /EHsc /RTC1 /MDd /GS /fp:precise /Zc:wchar_t /Zc:forScope /Fo"Debug\\" /Fd"Debug\vc120.pdb" /Gd /TP /analyze- /errorReport:prompt "Program9(MyGame).cpp" ball_object.cpp game.cpp game_level.cpp game_object.cpp main.cpp resource_manager.cpp shader.cpp sprite_renderer.cpp texture.cpp
+         texture.cpp
+         sprite_renderer.cpp
+         shader.cpp
+         resource_manager.cpp
+         main.cpp
+         game_object.cpp
+         game_level.cpp
+     1>c:\users\jatur_000\documents\visual studio 2013\projects\displaycameraimage\displaycameraimage\game_level.cpp(62): warning C4244: 'initializing' : conversion from 'GLuint' to 'GLfloat', possible loss of data
          game.cpp
      1>c:\users\jatur_000\documents\visual studio 2013\projects\displaycameraimage\displaycameraimage\game.cpp(82): warning C4351: new behavior: elements of array 'Game::Keys' will be default initialized
      1>c:\users\jatur_000\documents\visual studio 2013\projects\displaycameraimage\displaycameraimage\game.cpp(135): warning C4805: '==' : unsafe mix of type 'GLboolean' and type 'bool' in operation
      1>c:\users\jatur_000\documents\visual studio 2013\projects\displaycameraimage\displaycameraimage\game.cpp(144): warning C4805: '==' : unsafe mix of type 'GLboolean' and type 'bool' in operation
+         ball_object.cpp
+         Program9(MyGame).cpp
+     1>c:\program files (x86)\windows kits\8.1\include\shared\minwindef.h(130): warning C4005: 'APIENTRY' : macro redefinition
+                 c:\program files (x86)\glfw-3.1.1.bin.win32\include\glfw\glfw3.h(85) : see previous definition of 'APIENTRY'
+     1>c:\users\jatur_000\documents\visual studio 2013\projects\displaycameraimage\displaycameraimage\program9(mygame).cpp(86): warning C4244: 'initializing' : conversion from 'double' to 'GLfloat', possible loss of data
+         Generating Code...
        Link:
          C:\Program Files (x86)\MicrosoftVisualStudio 12.0\VC\bin\link.exe /ERRORREPORT:PROMPT /OUT:"C:\Users\jatur_000\documents\visual studio 2013\Projects\displayCameraImage\Debug\displayCameraImage.exe" /INCREMENTAL /NOLOGO /LIBPATH:"C:\Program Files (x86)\Simple OpenGL Image Library\lib" /LIBPATH:"C:\Program Files (x86)\glfw-3.1.1.bin.WIN32\lib-vc2013" /LIBPATH:"C:\Program Files (x86)\glew-1.12.0_binaries\lib\Release\Win32" glfw3.lib opengl32.lib glew32s.lib SOIL.lib opencv_calib3d249d.lib opencv_contrib249d.lib opencv_core249d.lib opencv_features2d249d.lib opencv_flann249d.lib opencv_highgui249d.lib opencv_imgproc249d.lib opencv_legacy249d.lib opencv_ml249d.lib opencv_nonfree249d.lib opencv_objdetect249d.lib opencv_photo249d.lib opencv_stitching249d.lib opencv_ts249d.lib opencv_video249d.lib opencv_videostab249d.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"C:\Users\jatur_000\documents\visual studio 2013\Projects\displayCameraImage\Debug\displayCameraImage.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /DYNAMICBASE /NXCOMPAT /IMPLIB:"C:\Users\jatur_000\documents\visual studio 2013\Projects\displayCameraImage\Debug\displayCameraImage.lib" /MACHINE:X86 Debug\ball_object.obj
          Debug\game.obj
@@ -22,4 +36,4 @@
 
 Build succeeded.
 
-Time Elapsed 00:00:01.23
+Time Elapsed 00:00:08.09
