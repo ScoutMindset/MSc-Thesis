@@ -14,20 +14,19 @@
 
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
-
+#include < opencv2\opencv.hpp>  
+#include < opencv2/core/core.hpp>  
+#include < opencv2/video/tracking.hpp>
+#include < opencv2/highgui/highgui.hpp>  
+#include < opencv2/video/background_segm.hpp>  
 #include "game_level.h"
-
+const GLfloat PLAYER_VELOCITY(500.0f);
 // Represents the current state of the game
 enum GameState {
 	GAME_ACTIVE,
 	GAME_MENU,
 	GAME_WIN
 };
-
-// Initial size of the player paddle
-const glm::vec2 PLAYER_SIZE(100, 20);
-// Initial velocity of the player paddle
-const GLfloat PLAYER_VELOCITY(500.0f);
 
 // Game holds all game-related state and functionality.
 // Combines all game-related data into a single class for
@@ -39,8 +38,7 @@ public:
 	GameState              State;
 	GLboolean              Keys[1024];
 	GLuint                 Width, Height;
-	std::vector<GameLevel> Levels;
-	GLuint                 Level;
+	cv::Mat				   playerFrame;
 	// Constructor/Destructor
 	Game(GLuint width, GLuint height);
 	~Game();
@@ -52,8 +50,6 @@ public:
 	void Update(GLfloat dt);
 	void Render(cv::Mat &frame);
 	void DoCollisions();
-	//void ResetLevel();
-	void ResetPlayer();
 };
 
 #endif
