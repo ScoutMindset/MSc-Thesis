@@ -160,7 +160,7 @@ void Game::Render(cv::Mat &frame)
 	}
 }
 
-void Game::DoCollisions()
+void Game::DoCollisions()//cv::Mat &frame)
 {
 	glm::vec2 ball_center = Ball->Position + Ball->Radius;
 	glm::vec2 velocity = glm::vec2(0,0);
@@ -168,28 +168,42 @@ void Game::DoCollisions()
 	GLint ball_radius = Ball->Radius;
 	GLint center_distanceX, center_distanceY;
 	GLfloat current_velocity_length = glm::length(Ball->Velocity);
+	int i, j;
 	cv::namedWindow("Collision");
-	for (int i = Ball->Position.x; i <= Ball->Position.x + 2 * ball_radius; i++)
+	for (i = Ball->Position.x; i <= Ball->Position.x + 2 * ball_radius; i++)
 	{
-		for (int j = Ball->Position.y; j <= Ball->Position.y + 2 * ball_radius; j++)
+		for (j = Ball->Position.y; j <= Ball->Position.y + 2 * ball_radius; j++)
 		{
+			if ((i == Ball->Position.x) && (j == Ball->Position.y))
+			{
+				currentFrame.at<cv::Vec3b>(j, i)[0] = 255;
+				currentFrame.at<cv::Vec3b>(j, i)[1] = 255;
+				currentFrame.at<cv::Vec3b>(j, i)[2] = 0;
+			}
 			center_distanceX = (ball_center.x - i);
 			center_distanceY = (ball_center.y - j);
 			pixelValue = playerFrame.at<uchar>(j,i);
 			
 			/*if (pixelValue == 255)
 				std::cout << "whatever";*/
-			if ((sqrt(center_distanceX*center_distanceX + center_distanceY*center_distanceY) <= ball_radius)&&
-				(playerFrame.at<uchar>(j,i)==255))
+			if (sqrt(center_distanceX*center_distanceX + center_distanceY*center_distanceY) <= ball_radius)
 			{
-				velocity += glm::vec2(center_distanceX, center_distanceY);
+				currentFrame.at<cv::Vec3b>(j, i)[0] = 255;
+				currentFrame.at<cv::Vec3b>(j, i)[1] = 0;
+				currentFrame.at<cv::Vec3b>(j, i)[2] = 0;
+				if (playerFrame.at<uchar>(j, i) == 255)
+				{
+
+					velocity += glm::vec2(center_distanceX, center_distanceY);
+					Ball->Stuck = GL_FALSE;
+				}
 			}
 		}
 	}
 	if (glm::length(velocity) > 0)
 	{
-		Ball->Velocity = glm::vec2(current_velocity_length*velocity.x / (velocity.x + velocity.y),
-			current_velocity_length*velocity.y / (velocity.x + velocity.y));
+		Ball->Velocity = glm::vec2(glm::length(INITIAL_BALL_VELOCITY)*velocity.x / (abs(velocity.x) + abs(velocity.y)),
+			glm::length(INITIAL_BALL_VELOCITY)*velocity.y / (abs(velocity.x) + abs(velocity.y)));
 		cv::imshow("Collision", this->playerFrame);
 	}
 

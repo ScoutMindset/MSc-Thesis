@@ -31,9 +31,9 @@
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mode);
 
 // The Width of the screen
-const GLuint SCREEN_WIDTH = 800;
+const GLuint SCREEN_WIDTH = 640;
 // The height of the screen
-const GLuint SCREEN_HEIGHT = 600;
+const GLuint SCREEN_HEIGHT = 480;
 
 Game Breakout(SCREEN_WIDTH, SCREEN_HEIGHT);
 
@@ -334,15 +334,18 @@ int main(int argc, char *argv[])
 			/// CV_RETR_CCOMP
 			/// CV_RETR_TREE
 			resize(frame, frame, Size(motionMapMorph.size().width, motionMapMorph.size().height));
-			imshow(window_morph_name, motionMapMorph);
+			
 			for (int i = 0; i < contours.size(); i++)
 				drawContours(frame, contours, i, color, 1, 8, hierarchy, 0, Point());
 			//cutPlayer(frame, motionMapMorph);
 			resize(frame, finalFrame, Size(finalFrame.size().width, finalFrame.size().height));
 			
-			imshow("Video", finalFrame);
+			
 		}
+		imshow(window_morph_name, motionMapMorph);
 		// End of OpenCV part #3
+		Breakout.currentFrame = finalFrame;
+		
 		Breakout.playerFrame = motionMapMorph;
 		// Calculate delta time
 		GLfloat currentFrame = glfwGetTime();
@@ -363,6 +366,7 @@ int main(int argc, char *argv[])
 		Breakout.Render(frame);
 
 		glfwSwapBuffers(window);
+		imshow("Video", Breakout.currentFrame);
 	}
 
 	// Delete all resources as loaded using the resource manager

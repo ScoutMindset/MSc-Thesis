@@ -38,7 +38,7 @@ public:
 	GameState              State;
 	GLboolean              Keys[1024];
 	GLuint                 Width, Height;
-	cv::Mat				   playerFrame;
+	cv::Mat				   playerFrame, currentFrame;
 	// Constructor/Destructor
 	Game(GLuint width, GLuint height);
 	~Game();
@@ -49,7 +49,7 @@ public:
 	void ProcessInput(GLfloat dt);
 	void Update(GLfloat dt);
 	void Render(cv::Mat &frame);
-	void DoCollisions();
+	void DoCollisions();// cv::Mat &frame);
 };
 
 #endif
