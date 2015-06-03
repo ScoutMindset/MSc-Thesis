@@ -204,6 +204,8 @@ void Game::DoCollisions()//cv::Mat &frame)
 	{
 		Ball->Velocity = glm::vec2(glm::length(INITIAL_BALL_VELOCITY)*velocity.x / (abs(velocity.x) + abs(velocity.y)),
 			glm::length(INITIAL_BALL_VELOCITY)*velocity.y / (abs(velocity.x) + abs(velocity.y)));
+		Ball->Position.x += Ball->Radius* velocity.x / (abs(velocity.x) + abs(velocity.y));
+		Ball->Position.y += Ball->Radius* velocity.y / (abs(velocity.x) + abs(velocity.y));
 		cv::imshow("Collision", this->playerFrame);
 	}
 
