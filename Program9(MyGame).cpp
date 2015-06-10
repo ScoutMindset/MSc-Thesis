@@ -56,13 +56,15 @@ Mat motionMap; /// Image variable that is the result of image detection.
 Mat motionMapMorph; /// Image variable that is the result of image detection after morphological operations.
 
 ///OTHER GLOBAL VARIABLES
-int MAX_KERNEL_LENGTH = 20;
+int MAX_KERNEL_LENGTH = 15;
 char filter;
 char smoothing;
 
 Mat detectMotion(Mat& frame1, Mat& frame2, int threshold, char colorSpace);
 
-void modelGaussianBackground(VideoCapture &capture, Mat &meanValue, Mat &standardDeviation);
+Mat modelGaussianBackground(VideoCapture &capture, Mat &meanValue, char colorSpace, int resizeScale);
+
+Mat detectMotionGaussian(Mat& currentFrame, Mat& meanValue, Mat& standardDeviation, int threshold);
 
 void Morphology_Operations(int, void*);
 // OpenCV end of part #1
@@ -105,25 +107,34 @@ int main(int argc, char *argv[])
 	MoveWindow(consoleWindow, 10, 10, 800, 480, FALSE);
 	VideoCapture capture; /// This variable captures the video stream from the camera.
 	capture.open(0);	/// The video stream variable is initialized with the default ('0') camera device on the PC.	
-	waitKey(10);  /// A wait is performed so that the camera has enough time to start working.
+	waitKey(100);  /// A wait is performed so that the camera has enough time to start working.
+
+	int threshold = 17;
+	int gaussianThreshold = 1;
+	int delay = 0;
+	int k = -1;
+	int clockIterator = 0;
+	int resizeScale = 3;
+	
 
 	Mat frame, finalFrame; ///Current frame image variable.
 	Mat frameSmooth;
 	Mat frameSmall;
 	Mat prevFrame;
-	Mat meanValue = Mat::zeros(SCREEN_WIDTH, SCREEN_HEIGHT, CV_16UC3);
-	Mat standardDeviation = Mat::zeros(SCREEN_WIDTH, SCREEN_HEIGHT, CV_16UC3);
+	Mat meanValueGray = Mat::zeros(SCREEN_HEIGHT / resizeScale, SCREEN_WIDTH / resizeScale, CV_32FC1);
+	Mat meanValueColor = Mat::zeros(SCREEN_HEIGHT / resizeScale, SCREEN_WIDTH / resizeScale, CV_32FC3);
+	Mat meanValueImg, standardDeviationImg;
+	Mat standardDeviationGray = Mat::zeros(SCREEN_HEIGHT / resizeScale, SCREEN_WIDTH / resizeScale, CV_32FC1);
+	Mat standardDeviationColor = Mat::zeros(SCREEN_HEIGHT / resizeScale, SCREEN_WIDTH / resizeScale, CV_32FC3);
+	
 
 	vector<vector<Point> > contours;
 	Scalar color(0, 0, 255);
 	vector<Vec4i> hierarchy;
 
-	int threshold = 17;
-	int delay = 0;
-	int k = -1;
-	int clockIterator = 0;
-	int resizeScale = 3;
+	
 
+	char bsMethod;
 	char colorSpace;
 
 	clock_t t;
@@ -142,21 +153,26 @@ int main(int argc, char *argv[])
 	namedWindow("Difference Image", WINDOW_NORMAL);
 	moveWindow("Difference Image", 600, 400);
 
-	std::cout << "Please specify if you want to apply smoothing: (y)es or (n)o." << std::endl;
-	std::cin >> smoothing;
-	if ((smoothing == 'y') || (smoothing == 'Y'))
+	std::cout << "Please specify if you want to use the (c)lassical BS method or the (G)aussian modelling method of BS" << std::endl;
+	std::cin >> bsMethod;
+	if (bsMethod == 'c')
 	{
-		std::cout << "Please specify which filter you want to apply to the current frame: (h)omogenous, (g)aussian, (m)edian or (b)ilateral." << std::endl;
-		std::cin >> filter;
+		std::cout << "Please specify if you want to apply smoothing: (y)es or (n)o." << std::endl;
+		std::cin >> smoothing;
+		if ((smoothing == 'y') || (smoothing == 'Y'))
+		{
+			std::cout << "Please specify which filter you want to apply to the current frame: (h)omogenous, (g)aussian, (m)edian or (b)ilateral." << std::endl;
+			std::cin >> filter;
+		}
 	}
 
-	std::cout << "Please specify to which space should the background model be transformed: (g)rayscale, (h)sv or (r)gb.";
+	std::cout << "Please specify to which space should the background model be transformed: (g)rayscale, (h)sv or (r)gb." << std::endl;
 	std::cin >> colorSpace;
 
 	capture >> frame;
 	finalFrame = frame.clone();
 	Mat templateEmpty = Mat::zeros(frame.size(), CV_8UC3); /// This image variable contains the video frame WITHOUT the player's body.
-	flip(frame, frame, 1); /// This function causes the mirror-like display of the video from the camera.
+	cv::flip(frame, frame, 1); /// This function causes the mirror-like display of the video from the camera.
 	cv::resize(frame, frameSmall, Size(frame.size().width / resizeScale, frame.size().height / resizeScale));
 	
 
@@ -191,25 +207,57 @@ int main(int argc, char *argv[])
 
 	/// Create window 
 	namedWindow(window_morph_name, WINDOW_NORMAL);
-	moveWindow(window_morph_name, 1250, 10);
+	cv::moveWindow(window_morph_name, 1250, 10);
 
 	/// Create Trackbar to select Morphology operation
-	createTrackbar("Operator:\n 0: Opening - 1: Closing  \n 2: Gradient - 3: Top Hat \n 4: Black Hat",
+	cv::createTrackbar("Operator:\n 0: Opening - 1: Closing  \n 2: Gradient - 3: Top Hat \n 4: Black Hat",
 		"Video", &morph_operator, max_operator, Morphology_Operations);
 
 	/// Create Trackbar to select kernel type
-	createTrackbar("Element:\n 0: Rect - 1: Cross - 2: Ellipse", "Video",
+	cv::createTrackbar("Element:\n 0: Rect - 1: Cross - 2: Ellipse", "Video",
 		&morph_elem, max_elem,
 		Morphology_Operations);
 
 	/// Create Trackbar to choose kernel size
-	createTrackbar("Kernel size:\n 2n +1", "Video",
+	cv::createTrackbar("Kernel size:\n 2n +1", "Video",
 		&morph_size, max_kernel_size,
 		Morphology_Operations);
 
 	/// PROCESSING LOOP
-	cout << "Press ESCAPE in order to leave the program." << endl;
+	std::cout << "Press ESCAPE in order to leave the program." << endl;
 
+	delay = 500000000;
+	while (1)
+	{
+		if (delay != 0) /// This part of the code is responsible for the countdown that allows the user to remove her/himself from the frame.
+			/// WARNING: THIS COUNTDOWN IS NOT IN SECONDS AND DEPENDS ON HOW FAST THE REST OF THE WHILE LOOP IS EXECUTED!
+		{
+			if ((delay % 100000000) == 0)
+				cout << delay / 100000000 << endl;
+			delay--;
+			if (delay == 0)
+				break;
+		}
+	}
+	
+
+	if ((colorSpace == 'g') || (colorSpace == 'g'))
+	{
+		standardDeviationGray = modelGaussianBackground(capture, meanValueGray, colorSpace, resizeScale);
+		meanValueGray.convertTo(meanValueImg, CV_8UC1);
+		standardDeviationGray.convertTo(standardDeviationImg, CV_8UC1);
+		imshow("Mean Value Background", meanValueImg);
+		imshow("Standard Deviation Background", standardDeviationImg);
+	}
+	else
+	{
+		standardDeviationColor = modelGaussianBackground(capture, meanValueColor, colorSpace, resizeScale);
+		meanValueColor.convertTo(meanValueImg, CV_8UC3);
+		standardDeviationColor.convertTo(standardDeviationImg, CV_8UC3);
+		imshow("Mean Value Background", meanValueImg);
+		imshow("Standard Deviation Background", standardDeviationImg);
+	}
+	
 	// End of OpenCV part #2
 
 	while (!glfwWindowShouldClose(window))
@@ -223,7 +271,7 @@ int main(int argc, char *argv[])
 
 		if (!(frame.empty())) /// The operations are conducted only if the captured video frame is not empty!
 		{
-			flip(frame, frame, 1);
+			cv::flip(frame, frame, 1);
 			cv::resize(frame, frameSmall, Size(frame.size().width / resizeScale, frame.size().height / resizeScale));
 			if (smoothing == 'y')
 			{
@@ -264,19 +312,41 @@ int main(int argc, char *argv[])
 
 				/// MOTION DETECTION BEGINS
 				t = clock();
-				motionMap = detectMotion(prevFrame, frameSmooth, threshold, colorSpace);
-				if (k < 1)
-					prevFrame = frameSmooth.clone();/// Current frame is assigned as the previous frame for the next iteration of the 'while' loop.
+				if (bsMethod == 'c' || bsMethod == 'C')
+				{
+					motionMap = detectMotion(prevFrame, frameSmooth, threshold, colorSpace);
+					if (k < 1)
+						prevFrame = frameSmooth.clone();/// Current frame is assigned as the previous frame for the next iteration of the 'while' loop.
+				}
+					
+				else if (bsMethod == 'g' || bsMethod == 'G')
+				{
+					if ((colorSpace == 'g') || (colorSpace == 'G'))
+						motionMap = detectMotionGaussian(frameSmooth, meanValueGray, standardDeviationGray, threshold);
+					else
+						motionMap = detectMotionGaussian(frameSmooth, meanValueColor, standardDeviationColor, threshold);
+				}
+					
+				
 
 			}
 			else
 			{
 				/// MOTION DETECTION BEGINS
 				t = clock();
-				motionMap = detectMotion(prevFrame, frameSmall, threshold, colorSpace);
-				if (k < 1)
-					prevFrame = frameSmall.clone();/// Current frame is assigned as the previous frame for the next iteration of the 'while' loop.
-
+				if (bsMethod == 'c' || bsMethod == 'C')
+				{
+					motionMap = detectMotion(prevFrame, frameSmall, threshold, colorSpace);
+					if (k < 1)
+						prevFrame = frameSmall.clone();/// Current frame is assigned as the previous frame for the next iteration of the 'while' loop.
+				}
+				else if (bsMethod == 'g' || bsMethod == 'G')
+				{
+					if ((colorSpace == 'g') || (colorSpace == 'G'))
+						motionMap = detectMotionGaussian(frameSmall, meanValueGray, standardDeviationGray, gaussianThreshold);
+					else
+						motionMap = detectMotionGaussian(frameSmall, meanValueColor, standardDeviationColor, gaussianThreshold);
+				}
 			}
 
 			if (clockIterator == 100)
@@ -400,7 +470,169 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 		}
 	}
 }
+
 // OpenCV part #4
+Mat modelGaussianBackground(VideoCapture &capture, Mat &meanValue, char colorSpace, int resizeScale)
+{
+	const int length = 100;
+	Mat matElement, frame[length];
+	for (int i = 0; i < length; i++)
+	{
+		capture >> matElement;
+		cv::flip(matElement, matElement, 1);
+		cv::resize(matElement, matElement, Size(matElement.size().width / resizeScale, matElement.size().height / resizeScale));
+		if ((filter == 'H') || (filter == 'h'))
+		{
+			for (int j = 1; j < MAX_KERNEL_LENGTH; j = j + 2)
+				blur(matElement, matElement, Size(j, j), Point(-1, -1));
+		}
+		else if ((filter == 'G') || (filter == 'g'))
+		{
+			for (int j = 1; j < MAX_KERNEL_LENGTH; j = j + 2)
+				GaussianBlur(matElement, matElement, Size(j, j), 0, 0);
+		}
+		else if ((filter == 'M') || (filter == 'm'))
+		{
+			for (int j = 1; j < MAX_KERNEL_LENGTH; j = j + 2)
+				medianBlur(matElement, matElement, j);
+		}
+		else if ((filter == 'B') || (filter == 'b'))
+		{
+			for (int j = 1; j < MAX_KERNEL_LENGTH; j = j + 2)
+				bilateralFilter(matElement, matElement, j, j * 2, j / 2);
+		}
+		if ((colorSpace == 'g') || (colorSpace == 'G'))
+		{
+			cvtColor(matElement, matElement, CV_BGR2GRAY);
+			matElement.convertTo(frame[i], CV_32FC1);
+
+		}
+		else if ((colorSpace == 'h') || (colorSpace == 'H'))
+		{
+			cvtColor(matElement, matElement, CV_BGR2HSV);
+			matElement.convertTo(frame[i], CV_32FC3);
+		}
+		else
+		{
+			matElement.convertTo(frame[i], CV_32FC3);
+		}
+
+		add(meanValue, frame[i], meanValue);
+	}
+	meanValue /= length;
+
+	Mat standardDeviationGray = Mat::zeros(SCREEN_HEIGHT / resizeScale, SCREEN_WIDTH / resizeScale, CV_32FC1);
+	Mat standardDeviationColor = Mat::zeros(SCREEN_HEIGHT / resizeScale, SCREEN_WIDTH / resizeScale, CV_32FC3);
+	if ((colorSpace == 'g') || (colorSpace == 'G'))
+	{
+		for (int i = 0; i < meanValue.rows; i++)
+		{
+			for (int j = 0; j < meanValue.cols; j++)
+			{
+				for (int k = 0; k < 100; k++)
+				{
+					//std::cout << standardDeviationGray.at<float>(i, j) << std::endl;
+					standardDeviationGray.at<float>(i, j) += (meanValue.at<float>(i, j) - frame[k].at<float>(i, j)) *
+						(meanValue.at<float>(i, j) - frame[k].at<float>(i, j));
+					//std::cout << standardDeviationGray.at<float>(i, j) << std::endl;
+				}
+			}
+		}
+		standardDeviationGray /= length;
+		for (int i = 0; i < meanValue.rows; i++)
+			for (int j = 0; j < meanValue.cols; j++)
+			{
+			//std::cout << sqrt(standardDeviationGray.at<float>(i, j)) << std::endl;
+			standardDeviationGray.at<float>(i, j) = sqrt(standardDeviationGray.at<float>(i, j));
+			//std::cout << sqrt(standardDeviationGray.at<float>(i, j)) << std::endl;
+			}
+		return standardDeviationGray;
+	}
+	else
+	{
+		for (int i = 0; i < meanValue.rows; i++)
+		{
+			for (int j = 0; j < meanValue.cols; j++)
+			{
+				for (int k = 0; k < length; k++)
+				{
+					for (int l = 0; l < frame[k].channels(); l++)
+					{
+						standardDeviationColor.at<Vec3f>(i, j)[l] += sqrt(meanValue.at<Vec3f>(i, j)[l] - frame[k].at<Vec3f>(i, j)[l]) *
+							(meanValue.at<Vec3f>(i, j)[l] - frame[k].at<Vec3f>(i, j)[l]);
+					}
+				}
+			}
+		}
+		standardDeviationColor /= length;
+		for (int i = 0; i < meanValue.rows; i++)
+			for (int j = 0; j < meanValue.cols; j++)
+				for (int k = 0; k < meanValue.channels(); k++)
+				{
+			standardDeviationColor.at<Vec3f>(i, j)[k] = sqrt(standardDeviationColor.at<Vec3f>(i, j)[k]);
+				}
+		return standardDeviationColor;
+	}
+}
+
+Mat detectMotionGaussian(Mat& currentFrame, Mat& meanValue, Mat& standardDeviation,int colorSpace, int threshold)
+{
+	Mat  frameFloat;
+	double a = 0.001;
+	int difference = 0, channels = meanValue.channels(), modify = 0;
+
+	if (channels == 3)
+		currentFrame.convertTo(frameFloat, CV_32FC3);
+	else
+	{
+		cvtColor(currentFrame, currentFrame, CV_BGR2GRAY);
+		currentFrame.convertTo(frameFloat, CV_32FC1);
+
+	}
+
+	Mat motionMap(currentFrame.rows, currentFrame.cols, CV_8UC1); /// The dif5ference image is initialized with the same amount of rows and columns as the function's frames.
+
+	for (int i = 0; i < currentFrame.rows; i++)
+	{
+		for (int j = 0; j < currentFrame.cols; j++)
+		{
+			for (int k = 0; k < channels; k++)
+			{
+				if (channels == 3)
+				{
+					modify += (abs(frameFloat.at<Vec3f>(i, j)[k] - meanValue.at<Vec3f>(i, j)[k]) > threshold * standardDeviation.at<Vec3f>(i, j)[k]);
+					if ((!(modify - 3)) || (!(modify - 2))|| (!(modify - 1)))
+						motionMap.at<uchar>(i, j) = 255;
+					else
+					{
+						motionMap.at<uchar>(i, j) = 0;
+						/*frame1.at<Vec3b>(i, j)[0] = 0.999*frame1.at<Vec3b>(i, j)[0] + 0.001*frame2.at<Vec3b>(i, j)[0];
+						frame1.at<Vec3b>(i, j)[1] = 0.999*frame1.at<Vec3b>(i, j)[1] + 0.001*frame2.at<Vec3b>(i, j)[1];
+						frame1.at<Vec3b>(i, j)[2] = 0.999*frame1.at<Vec3b>(i, j)[2] + 0.001*frame2.at<Vec3b>(i, j)[2];*/
+					}
+				}
+				else
+				{
+					modify = (abs(frameFloat.at<float>(i, j) - meanValue.at<float>(i, j)) > threshold * standardDeviation.at<float>(i, j));
+					if (!(modify - 1))
+						motionMap.at<uchar>(i, j) = 255;
+					else
+					{
+						motionMap.at<uchar>(i, j) = 0;
+						/*frame1.at<Vec3b>(i, j)[0] = 0.999*frame1.at<Vec3b>(i, j)[0] + 0.001*frame2.at<Vec3b>(i, j)[0];
+						frame1.at<Vec3b>(i, j)[1] = 0.999*frame1.at<Vec3b>(i, j)[1] + 0.001*frame2.at<Vec3b>(i, j)[1];
+						frame1.at<Vec3b>(i, j)[2] = 0.999*frame1.at<Vec3b>(i, j)[2] + 0.001*frame2.at<Vec3b>(i, j)[2];*/
+					}
+
+				}
+
+			}
+			modify = 0;
+		}
+	}
+	return motionMap;
+}
+
 Mat detectMotion(Mat& frame1, Mat& frame2, int threshold, char colorSpace)
 {
 	Mat  frame1Trans;
@@ -467,79 +699,6 @@ Mat detectMotion(Mat& frame1, Mat& frame2, int threshold, char colorSpace)
 	}
 	return motionMap;
 }
-
-Mat detectMotionGaussian(Mat& currentFrame, Mat& meanValue, Mat& standardDeviation, int threshold)
-{
-	Mat  frame1Trans;
-	Mat  frame2Trans;
-	double a = 0.001;
-	int difference = 0, channels;
-
-	Mat motionMap(currentFrame.rows, currentFrame.cols, CV_8UC1); /// The difference image is initialized with the same amount of rows and columns as the function's frames.
-
-	for (int i = 0; i < currentFrame.rows; i++)
-	{
-		for (int j = 0; j < currentFrame.cols; j++)
-		{
-			for (int k = 0; k < channels; k++)
-			{
-				difference += abs(currentFrame.at<Vec3b>(i, j)[k] - meanValue.at<Vec3b>(i, j)[k] - standardDeviation.at<Vec3b>(i, j)[k]);
-			}
-
-
-			/*difference/channels;*/
-			/*sqrt(difference)*/
-			if (difference / channels> threshold)
-			{
-				motionMap.at<uchar>(i, j) = 255;
-			}
-			else
-			{
-				motionMap.at<uchar>(i, j) = 0;
-				/*frame1.at<Vec3b>(i, j)[0] = 0.999*frame1.at<Vec3b>(i, j)[0] + 0.001*frame2.at<Vec3b>(i, j)[0];
-				frame1.at<Vec3b>(i, j)[1] = 0.999*frame1.at<Vec3b>(i, j)[1] + 0.001*frame2.at<Vec3b>(i, j)[1];
-				frame1.at<Vec3b>(i, j)[2] = 0.999*frame1.at<Vec3b>(i, j)[2] + 0.001*frame2.at<Vec3b>(i, j)[2];*/
-			}
-			difference = 0;
-		}
-	}
-	return motionMap;
-}
-
-void modelGaussianBackground(VideoCapture &capture, Mat &meanValue, Mat &standardDeviation)
-{
-	Mat matArray[100];
-	for (int i = 0; i < 100; i++)
-	{
-		capture >> matArray[i];
-		add(meanValue, matArray[i], meanValue);
-	}
-	meanValue /= 100;
-
-	for (int i = 0; i < meanValue.rows; i++)
-	{
-		for (int j = 0; j < meanValue.cols; j++)
-		{
-			for (int k = 0; k < 100; k++)
-			{
-				standardDeviation.at<Vec3d>(i, j)[0] += (meanValue.at<Vec3b>(i, j)[0] - matArray[k].at<Vec3b>(i, j)[0]) *
-					(meanValue.at<Vec3b>(i, j)[0] - matArray[k].at<Vec3b>(i, j)[0]);
-				standardDeviation.at<Vec3d>(i, j)[1] += (meanValue.at<Vec3b>(i, j)[1] - matArray[k].at<Vec3b>(i, j)[1]) *
-					(meanValue.at<Vec3b>(i, j)[1] - matArray[k].at<Vec3b>(i, j)[1]);
-				standardDeviation.at<Vec3d>(i, j)[2] += (meanValue.at<Vec3b>(i, j)[2] - matArray[k].at<Vec3b>(i, j)[2]) *
-					(meanValue.at<Vec3b>(i, j)[2] - matArray[k].at<Vec3b>(i, j)[2]);
-			}
-		}
-	}
-	standardDeviation /= 100;
-}
-
-
-//Mat detectMotion1G(Mat& frame, Mat& mean, Mat& cov)
-//{
-//	
-//}
-
 
 void Morphology_Operations(int, void*)
 {
