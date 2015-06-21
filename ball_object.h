@@ -23,6 +23,7 @@ public:
 	//BallState
 	GLfloat Radius;
 	GLboolean Stuck;
+	GLboolean Destroyed;
 
 	BallObject();
 	BallObject(glm::vec2 pos, GLfloat radius, glm::vec2 velocity, Texture2D sprite);

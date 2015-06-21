@@ -123,7 +123,7 @@ void Game::ProcessInput(GLfloat dt)
 			if (Ball->Position.x >= 0)
 			{
 				if (Ball->Stuck == true)
-					Ball->Position.x -= velocity;
+					Ball->Position.x -= 5;
 			}
 		}
 		if (this->Keys[GLFW_KEY_D])
@@ -131,7 +131,7 @@ void Game::ProcessInput(GLfloat dt)
 			if (Ball->Position.x <= this->Width - Ball->Size.x)
 			{
 				if (Ball->Stuck == true)
-					Ball->Position.x += velocity;
+					Ball->Position.x += 5;
 			}
 		}
 		if (this->Keys[GLFW_KEY_SPACE])
@@ -155,7 +155,8 @@ void Game::Render(cv::Mat &frame)
 	{
 		// Draw background
 		ResourceManager::LoadMatTexture(frame, GL_FALSE, "background");
-		Renderer->DrawSprite(ResourceManager::GetTexture("background"), glm::vec2(0, 0), glm::vec2(this->Width, this->Height), 0.0f);		
+		Renderer->DrawSprite(ResourceManager::GetTexture("background"), glm::vec2(0, 0), glm::vec2(this->Width, this->Height), 0.0f);	
+		if (!Ball->Destroyed)
 		Ball->Draw(*Renderer);
 	}
 }

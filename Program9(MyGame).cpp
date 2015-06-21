@@ -56,15 +56,15 @@ Mat motionMap; /// Image variable that is the result of image detection.
 Mat motionMapMorph; /// Image variable that is the result of image detection after morphological operations.
 
 ///OTHER GLOBAL VARIABLES
-int MAX_KERNEL_LENGTH = 15;
+int MAX_KERNEL_LENGTH = 10;
 char filter;
 char smoothing;
 
-Mat detectMotion(Mat& frame1, Mat& frame2, int threshold, char colorSpace);
+Mat detectMotion(Mat& frame1, Mat& frame2, int threshold);//, char colorSpace);
 
 Mat modelGaussianBackground(VideoCapture &capture, Mat &meanValue, char colorSpace, int resizeScale);
 
-Mat detectMotionGaussian(Mat& currentFrame, Mat& meanValue, Mat& standardDeviation, int threshold);
+Mat detectMotionGaussian(Mat& currentFrame, Mat& meanValue, Mat& standardDeviation, int threshold, char colorSpace);
 
 void Morphology_Operations(int, void*);
 // OpenCV end of part #1
@@ -104,17 +104,16 @@ int main(int argc, char *argv[])
 	// OpenCV part #2
 	/// VARIABLES
 	HWND consoleWindow = GetConsoleWindow();
-	MoveWindow(consoleWindow, 10, 10, 800, 480, FALSE);
+	MoveWindow(consoleWindow, 1100, 10, 800, 200, FALSE);
 	VideoCapture capture; /// This variable captures the video stream from the camera.
 	capture.open(0);	/// The video stream variable is initialized with the default ('0') camera device on the PC.	
 	waitKey(100);  /// A wait is performed so that the camera has enough time to start working.
 
-	int threshold = 17;
-	int gaussianThreshold = 1;
+	int threshold;
 	int delay = 0;
 	int k = -1;
 	int clockIterator = 0;
-	int resizeScale = 3;
+	int resizeScale = 4;
 	
 
 	Mat frame, finalFrame; ///Current frame image variable.
@@ -148,13 +147,16 @@ int main(int argc, char *argv[])
 	signed char input;
 
 	/// INITIAL CAMERA OPERATIONS
-	namedWindow("Video");
-	moveWindow("Video", 10, 400);
+	/*namedWindow("Video");
+	moveWindow("Video", 10, 400);*/
 	namedWindow("Difference Image", WINDOW_NORMAL);
-	moveWindow("Difference Image", 600, 400);
+	moveWindow("Difference Image", 1100, 250);
 
 	std::cout << "Please specify if you want to use the (c)lassical BS method or the (G)aussian modelling method of BS" << std::endl;
 	std::cin >> bsMethod;
+	std::cout << "Please specify the threshold for the BS method (the suggested value for the classical method is 15 and the" <<
+				" suggested value for the Gaussian method is 10):" << std::endl;
+	std::cin >> threshold;
 	if (bsMethod == 'c')
 	{
 		std::cout << "Please specify if you want to apply smoothing: (y)es or (n)o." << std::endl;
@@ -166,8 +168,12 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	std::cout << "Please specify to which space should the background model be transformed: (g)rayscale, (h)sv or (r)gb." << std::endl;
-	std::cin >> colorSpace;
+	if ((bsMethod == 'g') || (bsMethod == 'G'))
+	{
+		std::cout << "Please specify to which space should the background model be transformed: (g)rayscale, (H)SV, (Y)CrCb or (R)GB." << std::endl;
+		std::cin >> colorSpace;
+	}
+	
 
 	capture >> frame;
 	finalFrame = frame.clone();
@@ -241,22 +247,26 @@ int main(int argc, char *argv[])
 	}
 	
 
-	if ((colorSpace == 'g') || (colorSpace == 'g'))
+	if (bsMethod=='g')
 	{
-		standardDeviationGray = modelGaussianBackground(capture, meanValueGray, colorSpace, resizeScale);
-		meanValueGray.convertTo(meanValueImg, CV_8UC1);
-		standardDeviationGray.convertTo(standardDeviationImg, CV_8UC1);
-		imshow("Mean Value Background", meanValueImg);
-		imshow("Standard Deviation Background", standardDeviationImg);
+		if ((colorSpace == 'g') || (colorSpace == 'G'))
+		{
+			standardDeviationGray = modelGaussianBackground(capture, meanValueGray, colorSpace, resizeScale);
+			meanValueGray.convertTo(meanValueImg, CV_8UC1);
+			standardDeviationGray.convertTo(standardDeviationImg, CV_8UC1);
+			cv::imshow("Mean Value Background", meanValueImg);
+			cv::imshow("Standard Deviation Background", standardDeviationImg);
+		}
+		else
+		{
+			standardDeviationColor = modelGaussianBackground(capture, meanValueColor, colorSpace, resizeScale);
+			meanValueColor.convertTo(meanValueImg, CV_8UC3);
+			standardDeviationColor.convertTo(standardDeviationImg, CV_8UC3);
+			cv::imshow("Mean Value Background", meanValueImg);
+			cv::imshow("Standard Deviation Background", standardDeviationImg);
+		}
 	}
-	else
-	{
-		standardDeviationColor = modelGaussianBackground(capture, meanValueColor, colorSpace, resizeScale);
-		meanValueColor.convertTo(meanValueImg, CV_8UC3);
-		standardDeviationColor.convertTo(standardDeviationImg, CV_8UC3);
-		imshow("Mean Value Background", meanValueImg);
-		imshow("Standard Deviation Background", standardDeviationImg);
-	}
+	
 	
 	// End of OpenCV part #2
 
@@ -314,18 +324,18 @@ int main(int argc, char *argv[])
 				t = clock();
 				if (bsMethod == 'c' || bsMethod == 'C')
 				{
-					motionMap = detectMotion(prevFrame, frameSmooth, threshold, colorSpace);
+					motionMap = detectMotion(prevFrame, frameSmooth, threshold);// , colorSpace);
 					if (k < 1)
 						prevFrame = frameSmooth.clone();/// Current frame is assigned as the previous frame for the next iteration of the 'while' loop.
 				}
 					
-				else if (bsMethod == 'g' || bsMethod == 'G')
+				/*else if (bsMethod == 'g' || bsMethod == 'G')
 				{
 					if ((colorSpace == 'g') || (colorSpace == 'G'))
 						motionMap = detectMotionGaussian(frameSmooth, meanValueGray, standardDeviationGray, threshold);
 					else
 						motionMap = detectMotionGaussian(frameSmooth, meanValueColor, standardDeviationColor, threshold);
-				}
+				}*/
 					
 				
 
@@ -336,16 +346,16 @@ int main(int argc, char *argv[])
 				t = clock();
 				if (bsMethod == 'c' || bsMethod == 'C')
 				{
-					motionMap = detectMotion(prevFrame, frameSmall, threshold, colorSpace);
+					motionMap = detectMotion(prevFrame, frameSmall, threshold);//, colorSpace);
 					if (k < 1)
 						prevFrame = frameSmall.clone();/// Current frame is assigned as the previous frame for the next iteration of the 'while' loop.
 				}
 				else if (bsMethod == 'g' || bsMethod == 'G')
 				{
 					if ((colorSpace == 'g') || (colorSpace == 'G'))
-						motionMap = detectMotionGaussian(frameSmall, meanValueGray, standardDeviationGray, gaussianThreshold);
+						motionMap = detectMotionGaussian(frameSmall, meanValueGray, standardDeviationGray, threshold, colorSpace);
 					else
-						motionMap = detectMotionGaussian(frameSmall, meanValueColor, standardDeviationColor, gaussianThreshold);
+						motionMap = detectMotionGaussian(frameSmall, meanValueColor, standardDeviationColor, threshold, colorSpace);
 				}
 			}
 
@@ -445,7 +455,7 @@ int main(int argc, char *argv[])
 		Breakout.Render(frame);
 
 		glfwSwapBuffers(window);
-		cv::imshow("Video", Breakout.currentFrame);
+		//cv::imshow("Video", Breakout.currentFrame);
 	}
 	destroyAllWindows();
 	// Delete all resources as loaded using the resource manager
@@ -474,33 +484,14 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 // OpenCV part #4
 Mat modelGaussianBackground(VideoCapture &capture, Mat &meanValue, char colorSpace, int resizeScale)
 {
-	const int length = 100;
+	const int length = 250, channels = meanValue.channels();
+	float alpha;
 	Mat matElement, frame[length];
 	for (int i = 0; i < length; i++)
 	{
 		capture >> matElement;
 		cv::flip(matElement, matElement, 1);
 		cv::resize(matElement, matElement, Size(matElement.size().width / resizeScale, matElement.size().height / resizeScale));
-		if ((filter == 'H') || (filter == 'h'))
-		{
-			for (int j = 1; j < MAX_KERNEL_LENGTH; j = j + 2)
-				blur(matElement, matElement, Size(j, j), Point(-1, -1));
-		}
-		else if ((filter == 'G') || (filter == 'g'))
-		{
-			for (int j = 1; j < MAX_KERNEL_LENGTH; j = j + 2)
-				GaussianBlur(matElement, matElement, Size(j, j), 0, 0);
-		}
-		else if ((filter == 'M') || (filter == 'm'))
-		{
-			for (int j = 1; j < MAX_KERNEL_LENGTH; j = j + 2)
-				medianBlur(matElement, matElement, j);
-		}
-		else if ((filter == 'B') || (filter == 'b'))
-		{
-			for (int j = 1; j < MAX_KERNEL_LENGTH; j = j + 2)
-				bilateralFilter(matElement, matElement, j, j * 2, j / 2);
-		}
 		if ((colorSpace == 'g') || (colorSpace == 'G'))
 		{
 			cvtColor(matElement, matElement, CV_BGR2GRAY);
@@ -512,7 +503,12 @@ Mat modelGaussianBackground(VideoCapture &capture, Mat &meanValue, char colorSpa
 			cvtColor(matElement, matElement, CV_BGR2HSV);
 			matElement.convertTo(frame[i], CV_32FC3);
 		}
-		else
+		else if ((colorSpace == 'y') || (colorSpace == 'Y'))
+		{
+			cvtColor(matElement, matElement, CV_BGR2YCrCb);
+			matElement.convertTo(frame[i], CV_32FC3);
+		}
+		else if ((colorSpace == 'r') || (colorSpace == 'R'))
 		{
 			matElement.convertTo(frame[i], CV_32FC3);
 		}
@@ -529,12 +525,10 @@ Mat modelGaussianBackground(VideoCapture &capture, Mat &meanValue, char colorSpa
 		{
 			for (int j = 0; j < meanValue.cols; j++)
 			{
-				for (int k = 0; k < 100; k++)
+				for (int k = 0; k < length; k++)
 				{
-					//std::cout << standardDeviationGray.at<float>(i, j) << std::endl;
 					standardDeviationGray.at<float>(i, j) += (meanValue.at<float>(i, j) - frame[k].at<float>(i, j)) *
 						(meanValue.at<float>(i, j) - frame[k].at<float>(i, j));
-					//std::cout << standardDeviationGray.at<float>(i, j) << std::endl;
 				}
 			}
 		}
@@ -542,9 +536,7 @@ Mat modelGaussianBackground(VideoCapture &capture, Mat &meanValue, char colorSpa
 		for (int i = 0; i < meanValue.rows; i++)
 			for (int j = 0; j < meanValue.cols; j++)
 			{
-			//std::cout << sqrt(standardDeviationGray.at<float>(i, j)) << std::endl;
-			standardDeviationGray.at<float>(i, j) = sqrt(standardDeviationGray.at<float>(i, j));
-			//std::cout << sqrt(standardDeviationGray.at<float>(i, j)) << std::endl;
+				standardDeviationGray.at<float>(i, j) = sqrt(standardDeviationGray.at<float>(i, j));
 			}
 		return standardDeviationGray;
 	}
@@ -554,12 +546,15 @@ Mat modelGaussianBackground(VideoCapture &capture, Mat &meanValue, char colorSpa
 		{
 			for (int j = 0; j < meanValue.cols; j++)
 			{
-				for (int k = 0; k < length; k++)
+				for (int k = 0; k < channels; k++)
 				{
-					for (int l = 0; l < frame[k].channels(); l++)
+					for (int l = 0; l < length; l++)
 					{
-						standardDeviationColor.at<Vec3f>(i, j)[l] += sqrt(meanValue.at<Vec3f>(i, j)[l] - frame[k].at<Vec3f>(i, j)[l]) *
-							(meanValue.at<Vec3f>(i, j)[l] - frame[k].at<Vec3f>(i, j)[l]);
+						/*std::cout << standardDeviationColor.at<Vec3f>(i, j)[k] << "    ";
+						std::cout << "MV " << meanValue.at<Vec3f>(i, j)[k] << */
+						standardDeviationColor.at<Vec3f>(i, j)[k] += (meanValue.at<Vec3f>(i, j)[k] - frame[l].at<Vec3f>(i, j)[k]) *
+							(meanValue.at<Vec3f>(i, j)[k] - frame[l].at<Vec3f>(i, j)[k]);
+						/*std::cout << standardDeviationColor.at<Vec3f>(i, j)[k] << std::endl;*/
 					}
 				}
 			}
@@ -569,28 +564,43 @@ Mat modelGaussianBackground(VideoCapture &capture, Mat &meanValue, char colorSpa
 			for (int j = 0; j < meanValue.cols; j++)
 				for (int k = 0; k < meanValue.channels(); k++)
 				{
-			standardDeviationColor.at<Vec3f>(i, j)[k] = sqrt(standardDeviationColor.at<Vec3f>(i, j)[k]);
+					standardDeviationColor.at<Vec3f>(i, j)[k] = sqrt(standardDeviationColor.at<Vec3f>(i, j)[k]);
 				}
 		return standardDeviationColor;
 	}
 }
 
-Mat detectMotionGaussian(Mat& currentFrame, Mat& meanValue, Mat& standardDeviation,int colorSpace, int threshold)
+Mat detectMotionGaussian(Mat& currentFrame, Mat& meanValue, Mat& standardDeviation, int threshold, char  colorSpace)
 {
 	Mat  frameFloat;
 	double a = 0.001;
-	int difference = 0, channels = meanValue.channels(), modify = 0;
+	int difference = 0, channels, modify = 0;
 
-	if (channels == 3)
-		currentFrame.convertTo(frameFloat, CV_32FC3);
-	else
+	if ((colorSpace == 'g') || (colorSpace == 'G'))
 	{
+		channels = 1;
 		cvtColor(currentFrame, currentFrame, CV_BGR2GRAY);
 		currentFrame.convertTo(frameFloat, CV_32FC1);
-
+	}
+	else if ((colorSpace == 'h') || (colorSpace == 'H'))
+	{
+		channels = 2;
+		cvtColor(currentFrame, currentFrame, CV_BGR2HSV);
+		currentFrame.convertTo(frameFloat, CV_32FC3);
+	}
+	else if ((colorSpace == 'y') || (colorSpace == 'Y'))
+	{
+		channels = 3;
+		cvtColor(currentFrame, currentFrame, CV_BGR2YCrCb);
+		currentFrame.convertTo(frameFloat, CV_32FC3);
+	}
+	else if ((colorSpace == 'r') || (colorSpace == 'R'))
+	{
+		channels = 3;
+		currentFrame.convertTo(frameFloat, CV_32FC3);
 	}
 
-	Mat motionMap(currentFrame.rows, currentFrame.cols, CV_8UC1); /// The dif5ference image is initialized with the same amount of rows and columns as the function's frames.
+	Mat motionMap(currentFrame.rows, currentFrame.cols, CV_8UC1); /// The difference image is initialized with the same amount of rows and columns as the function's frames.
 
 	for (int i = 0; i < currentFrame.rows; i++)
 	{
@@ -598,34 +608,25 @@ Mat detectMotionGaussian(Mat& currentFrame, Mat& meanValue, Mat& standardDeviati
 		{
 			for (int k = 0; k < channels; k++)
 			{
-				if (channels == 3)
+				if ( (channels == 3) || (channels == 2) )
 				{
 					modify += (abs(frameFloat.at<Vec3f>(i, j)[k] - meanValue.at<Vec3f>(i, j)[k]) > threshold * standardDeviation.at<Vec3f>(i, j)[k]);
-					if ((!(modify - 3)) || (!(modify - 2))|| (!(modify - 1)))
-						motionMap.at<uchar>(i, j) = 255;
-					else
-					{
-						motionMap.at<uchar>(i, j) = 0;
-						/*frame1.at<Vec3b>(i, j)[0] = 0.999*frame1.at<Vec3b>(i, j)[0] + 0.001*frame2.at<Vec3b>(i, j)[0];
-						frame1.at<Vec3b>(i, j)[1] = 0.999*frame1.at<Vec3b>(i, j)[1] + 0.001*frame2.at<Vec3b>(i, j)[1];
-						frame1.at<Vec3b>(i, j)[2] = 0.999*frame1.at<Vec3b>(i, j)[2] + 0.001*frame2.at<Vec3b>(i, j)[2];*/
-					}
 				}
 				else
 				{
 					modify = (abs(frameFloat.at<float>(i, j) - meanValue.at<float>(i, j)) > threshold * standardDeviation.at<float>(i, j));
-					if (!(modify - 1))
-						motionMap.at<uchar>(i, j) = 255;
-					else
-					{
-						motionMap.at<uchar>(i, j) = 0;
-						/*frame1.at<Vec3b>(i, j)[0] = 0.999*frame1.at<Vec3b>(i, j)[0] + 0.001*frame2.at<Vec3b>(i, j)[0];
-						frame1.at<Vec3b>(i, j)[1] = 0.999*frame1.at<Vec3b>(i, j)[1] + 0.001*frame2.at<Vec3b>(i, j)[1];
-						frame1.at<Vec3b>(i, j)[2] = 0.999*frame1.at<Vec3b>(i, j)[2] + 0.001*frame2.at<Vec3b>(i, j)[2];*/
-					}
-
 				}
 
+			}
+			/*if ( ((channels == 3) && (modify>0)) || 
+				((channels == 2) && (modify>0)) ||
+				((channels == 1) && (modify==1)) )*/
+			if (modify>0)
+				motionMap.at<uchar>(i, j) = 255;
+			else
+			{
+				motionMap.at<uchar>(i, j) = 0;
+				//meanValue.at<Vec3f>(i, j)[0] = 0.999
 			}
 			modify = 0;
 		}
@@ -633,7 +634,7 @@ Mat detectMotionGaussian(Mat& currentFrame, Mat& meanValue, Mat& standardDeviati
 	return motionMap;
 }
 
-Mat detectMotion(Mat& frame1, Mat& frame2, int threshold, char colorSpace)
+Mat detectMotion(Mat& frame1, Mat& frame2, int threshold)//, char colorSpace)
 {
 	Mat  frame1Trans;
 	Mat  frame2Trans;
@@ -645,26 +646,26 @@ Mat detectMotion(Mat& frame1, Mat& frame2, int threshold, char colorSpace)
 
 	Mat motionMap(rows, cols, CV_8UC1); /// The difference image is initialized with the same amount of rows and columns as the function's frames.
 	/// 
-	if ((colorSpace == 'g') || (colorSpace == 'G'))
-	{
-		cvtColor(frame1, frame1Trans, CV_BGR2GRAY); /// Both previous and current frames are converted to the Grayscale color space so that the
-		/// computation of differential image is faster.
-		cvtColor(frame2, frame2Trans, CV_BGR2GRAY);// Should it be RGB or BGR???
-		channels = 1;
-	}
-	else if ((colorSpace == 'h') || (colorSpace == 'H'))
-	{
-		cvtColor(frame1, frame1Trans, CV_BGR2HSV); /// Both previous and current frames are converted to the Grayscale color space so that the
-		/// computation of differential image is faster.
-		cvtColor(frame2, frame2Trans, CV_BGR2HSV);// Should it be RGB or BGR???
-		channels = 2;
-	}
-	else if ((colorSpace == 'r') || (colorSpace == 'R'))
-	{
+	//if ((colorSpace == 'g') || (colorSpace == 'G'))
+	//{
+	//	cvtColor(frame1, frame1Trans, CV_BGR2GRAY); /// Both previous and current frames are converted to the Grayscale color space so that the
+	//	/// computation of differential image is faster.
+	//	cvtColor(frame2, frame2Trans, CV_BGR2GRAY);// Should it be RGB or BGR???
+	//	channels = 1;
+	//}
+	//else if ((colorSpace == 'h') || (colorSpace == 'H'))
+	//{
+	//	cvtColor(frame1, frame1Trans, CV_BGR2HSV); /// Both previous and current frames are converted to the Grayscale color space so that the
+	//	/// computation of differential image is faster.
+	//	cvtColor(frame2, frame2Trans, CV_BGR2HSV);// Should it be RGB or BGR???
+	//	channels = 2;
+	//}
+	//else if ((colorSpace == 'r') || (colorSpace == 'R'))
+	//{
 		frame1Trans = frame1.clone();
 		frame2Trans = frame2.clone();
 		channels = 3;
-	}
+	/*}*/
 
 	for (int i = 0; i < rows; i++)
 	{
@@ -690,9 +691,9 @@ Mat detectMotion(Mat& frame1, Mat& frame2, int threshold, char colorSpace)
 			else
 			{
 				motionMap.at<uchar>(i, j) = 0;
-				frame1.at<Vec3b>(i, j)[0] = 0.99*frame1.at<Vec3b>(i, j)[0] + 0.01*frame2.at<Vec3b>(i, j)[0];
+				/*frame1.at<Vec3b>(i, j)[0] = 0.99*frame1.at<Vec3b>(i, j)[0] + 0.01*frame2.at<Vec3b>(i, j)[0];
 				frame1.at<Vec3b>(i, j)[1] = 0.99*frame1.at<Vec3b>(i, j)[1] + 0.01*frame2.at<Vec3b>(i, j)[1];
-				frame1.at<Vec3b>(i, j)[2] = 0.99*frame1.at<Vec3b>(i, j)[2] + 0.01*frame2.at<Vec3b>(i, j)[2];
+				frame1.at<Vec3b>(i, j)[2] = 0.99*frame1.at<Vec3b>(i, j)[2] + 0.01*frame2.at<Vec3b>(i, j)[2];*/
 			}
 			difference = 0;
 		}
