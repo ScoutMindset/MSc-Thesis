@@ -29,6 +29,8 @@
 
 // GLFW function declerations
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mode);
+void cursor_position_callback(GLFWwindow* window, double xpos, double ypos);
+void mouse_button_callback(GLFWwindow* window, int button, int action, int mods);
 
 // The Width of the screen
 const GLuint SCREEN_WIDTH = 640;
@@ -60,6 +62,10 @@ int MAX_KERNEL_LENGTH = 10;
 char filter;
 char smoothing;
 
+// DeltaTime variables (those are made global so that they can be used in the Breakout's "Update" function
+GLfloat deltaTime = 0.0f;
+GLfloat lastFrame = 0.0f;
+
 Mat detectMotion(Mat& frame1, Mat& frame2, int threshold);//, char colorSpace);
 
 Mat modelGaussianBackground(VideoCapture &capture, Mat &meanValue, char colorSpace, int resizeScale);
@@ -84,6 +90,8 @@ int main(int argc, char *argv[])
 	glGetError(); // Call it once to catch glewInit() bug, all other errors are now from our application.
 
 	glfwSetKeyCallback(window, key_callback);
+	glfwSetCursorPosCallback(window, cursor_position_callback);
+	glfwSetMouseButtonCallback(window, mouse_button_callback);
 
 	// OpenGL configuration
 	glViewport(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
@@ -93,10 +101,6 @@ int main(int argc, char *argv[])
 
 	// Initialize game
 	Breakout.Init();
-
-	// DeltaTime variables
-	GLfloat deltaTime = 0.0f;
-	GLfloat lastFrame = 0.0f;
 
 	// Start Game within Menu State
 	Breakout.State = GAME_ACTIVE;
@@ -114,6 +118,7 @@ int main(int argc, char *argv[])
 	int k = -1;
 	int clockIterator = 0;
 	int resizeScale = 4;
+	int noBalls;
 	
 
 	Mat frame, finalFrame; ///Current frame image variable.
@@ -147,8 +152,8 @@ int main(int argc, char *argv[])
 	signed char input;
 
 	/// INITIAL CAMERA OPERATIONS
-	/*namedWindow("Video");
-	moveWindow("Video", 10, 400);*/
+	namedWindow("Video");
+	moveWindow("Video", 10, 400);
 	namedWindow("Difference Image", WINDOW_NORMAL);
 	moveWindow("Difference Image", 1100, 250);
 
@@ -161,12 +166,13 @@ int main(int argc, char *argv[])
 	{
 		std::cout << "Please specify if you want to apply smoothing: (y)es or (n)o." << std::endl;
 		std::cin >> smoothing;
-		if ((smoothing == 'y') || (smoothing == 'Y'))
-		{
-			std::cout << "Please specify which filter you want to apply to the current frame: (h)omogenous, (g)aussian, (m)edian or (b)ilateral." << std::endl;
-			std::cin >> filter;
-		}
+		//if ((smoothing == 'y') || (smoothing == 'Y'))
+		//{
+		//	std::cout << "Please specify which filter you want to apply to the current frame: (h)omogenous, (g)aussian, (m)edian or (b)ilateral." << std::endl;
+		//	std::cin >> filter;
+		//}
 	}
+	filter = 'g';
 
 	if ((bsMethod == 'g') || (bsMethod == 'G'))
 	{
@@ -455,7 +461,7 @@ int main(int argc, char *argv[])
 		Breakout.Render(frame);
 
 		glfwSwapBuffers(window);
-		//cv::imshow("Video", Breakout.currentFrame);
+		cv::imshow("Video", Breakout.currentFrame);
 	}
 	destroyAllWindows();
 	// Delete all resources as loaded using the resource manager
@@ -480,6 +486,34 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 		}
 	}
 }
+
+void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
+{
+	double xPos, yPos;
+	glfwGetCursorPos(window, &xPos, &yPos);
+	Breakout.CursorPositionPrev.x = Breakout.CursorPosition.x;
+	Breakout.CursorPositionPrev.y = Breakout.CursorPosition.y;
+	Breakout.CursorPosition.x = xPos;
+	Breakout.CursorPosition.y = yPos;
+	Breakout.CursorUpdate();
+	// When a user presses the escape key, we set the WindowShouldClose property to true, closing the application
+	if (button == GLFW_MOUSE_BUTTON_1 && action == GLFW_PRESS)
+	{
+		Breakout.CheckCrosshair();
+	}
+}
+
+static void cursor_position_callback(GLFWwindow* window, double xpos, double ypos)
+{
+	Breakout.CursorPositionPrev.x = Breakout.CursorPosition.x;
+	Breakout.CursorPositionPrev.y = Breakout.CursorPosition.y;
+	Breakout.CursorPosition.x = xpos;
+	Breakout.CursorPosition.y = ypos;
+	Breakout.CursorUpdate();
+}
+
+
+
 
 // OpenCV part #4
 Mat modelGaussianBackground(VideoCapture &capture, Mat &meanValue, char colorSpace, int resizeScale)
