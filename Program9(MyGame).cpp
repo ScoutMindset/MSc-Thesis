@@ -60,7 +60,7 @@ Mat motionMapMorph; /// Image variable that is the result of image detection aft
 ///OTHER GLOBAL VARIABLES
 int MAX_KERNEL_LENGTH = 10;
 char filter;
-char smoothing;
+char smoothing = 'o'; //default values are different from the pool of choices available to the user so that the menu "while" loop is executed
 
 // DeltaTime variables (those are made global so that they can be used in the Breakout's "Update" function
 GLfloat deltaTime = 0.0f;
@@ -71,6 +71,8 @@ Mat detectMotion(Mat& frame1, Mat& frame2, int threshold);//, char colorSpace);
 Mat modelGaussianBackground(VideoCapture &capture, Mat &meanValue, char colorSpace, int resizeScale);
 
 Mat detectMotionGaussian(Mat& currentFrame, Mat& meanValue, Mat& standardDeviation, int threshold, char colorSpace);
+
+glm::vec2 handSimpleCrosshairControl(Mat& binaryMap, Mat& currentFrame, Mat& crosshairMap);
 
 void Morphology_Operations(int, void*);
 // OpenCV end of part #1
@@ -130,22 +132,23 @@ int main(int argc, char *argv[])
 	Mat meanValueImg, standardDeviationImg;
 	Mat standardDeviationGray = Mat::zeros(SCREEN_HEIGHT / resizeScale, SCREEN_WIDTH / resizeScale, CV_32FC1);
 	Mat standardDeviationColor = Mat::zeros(SCREEN_HEIGHT / resizeScale, SCREEN_WIDTH / resizeScale, CV_32FC3);
-	
+	Mat crosshairMap(1,1,CV_8UC3);
 
 	vector<vector<Point> > contours;
 	Scalar color(0, 0, 255);
 	vector<Vec4i> hierarchy;
 
-	
+	glm::vec2 crosshairCorner = glm::vec2(0, 0);
 
-	char bsMethod;
-	char colorSpace;
+	char bsMethod = 'a'; //default values are different from the pool of choices available to the user so that the menu "while" loop is executed
+	char colorSpace = 'p'; //default values are different from the pool of choices available to the user so that the menu "while" loop is executed
 
 	clock_t t;
 	clock_t sum = 0;
 
 
 	string window_morph_name = "Difference Image After Morphological Operations";
+	string window_crosshair_map_name = "Crosshair view";
 
 	bool disablePlayerTemplate = 1;
 
@@ -156,21 +159,27 @@ int main(int argc, char *argv[])
 	moveWindow("Video", 10, 400);
 	namedWindow("Difference Image", WINDOW_NORMAL);
 	moveWindow("Difference Image", 1100, 250);
-
-	std::cout << "Please specify if you want to use the (c)lassical BS method or the (G)aussian modelling method of BS" << std::endl;
-	std::cin >> bsMethod;
+	while ((bsMethod != 'c') && (bsMethod != 'C') && (bsMethod != 'g') && (bsMethod != 'G'))
+	{
+		std::cout << "Please specify if you want to use the (c)lassical BS method or the (G)aussian modelling method of BS" << std::endl;
+		std::cin >> bsMethod;
+	}
 	std::cout << "Please specify the threshold for the BS method (the suggested value for the classical method is 15 and the" <<
 				" suggested value for the Gaussian method is 10):" << std::endl;
 	std::cin >> threshold;
-	if (bsMethod == 'c')
+
+	while ((smoothing != 'y') && (smoothing != 'Y') && (smoothing != 'n') && (smoothing != 'N') && 
+		((bsMethod == 'c')||(bsMethod == 'C')))
 	{
-		std::cout << "Please specify if you want to apply smoothing: (y)es or (n)o." << std::endl;
-		std::cin >> smoothing;
-		//if ((smoothing == 'y') || (smoothing == 'Y'))
-		//{
-		//	std::cout << "Please specify which filter you want to apply to the current frame: (h)omogenous, (g)aussian, (m)edian or (b)ilateral." << std::endl;
-		//	std::cin >> filter;
-		//}
+
+			std::cout << "Please specify if you want to apply smoothing: (y)es or (n)o." << std::endl;
+			std::cin >> smoothing;
+			//if ((smoothing == 'y') || (smoothing == 'Y'))
+			//{
+			//	std::cout << "Please specify which filter you want to apply to the current frame: (h)omogenous, (g)aussian, (m)edian or (b)ilateral." << std::endl;
+			//	std::cin >> filter;
+			//}
+
 	}
 	filter = 'g';
 
@@ -180,8 +189,9 @@ int main(int argc, char *argv[])
 		std::cin >> colorSpace;
 	}
 	
-
+	
 	capture >> frame;
+	cv::resize(crosshairMap, crosshairMap, Size(frame.size().width , frame.size().height));
 	finalFrame = frame.clone();
 	Mat templateEmpty = Mat::zeros(frame.size(), CV_8UC3); /// This image variable contains the video frame WITHOUT the player's body.
 	cv::flip(frame, frame, 1); /// This function causes the mirror-like display of the video from the camera.
@@ -221,6 +231,9 @@ int main(int argc, char *argv[])
 	namedWindow(window_morph_name, WINDOW_NORMAL);
 	cv::moveWindow(window_morph_name, 1250, 10);
 
+	namedWindow(window_crosshair_map_name, WINDOW_NORMAL);
+	cv::moveWindow(window_morph_name, 1250, 500);
+
 	/// Create Trackbar to select Morphology operation
 	cv::createTrackbar("Operator:\n 0: Opening - 1: Closing  \n 2: Gradient - 3: Top Hat \n 4: Black Hat",
 		"Video", &morph_operator, max_operator, Morphology_Operations);
@@ -238,20 +251,23 @@ int main(int argc, char *argv[])
 	/// PROCESSING LOOP
 	std::cout << "Press ESCAPE in order to leave the program." << endl;
 
-	delay = 500000000;
-	while (1)
+	
+	if ((bsMethod == 'g') || (bsMethod == 'G'))
 	{
-		if (delay != 0) /// This part of the code is responsible for the countdown that allows the user to remove her/himself from the frame.
-			/// WARNING: THIS COUNTDOWN IS NOT IN SECONDS AND DEPENDS ON HOW FAST THE REST OF THE WHILE LOOP IS EXECUTED!
+		delay = 500000000;
+		while (1)
 		{
-			if ((delay % 100000000) == 0)
-				cout << delay / 100000000 << endl;
-			delay--;
-			if (delay == 0)
-				break;
+			if (delay != 0) /// This part of the code is responsible for the countdown that allows the user to remove her/himself from the frame.
+				/// WARNING: THIS COUNTDOWN IS NOT IN SECONDS AND DEPENDS ON HOW FAST THE REST OF THE WHILE LOOP IS EXECUTED!
+			{
+				if ((delay % 100000000) == 0)
+					cout << delay / 100000000 << endl;
+				delay--;
+				if (delay == 0)
+					break;
+			}
 		}
 	}
-	
 
 	if (bsMethod=='g')
 	{
@@ -275,7 +291,7 @@ int main(int argc, char *argv[])
 	
 	
 	// End of OpenCV part #2
-
+	
 	while (!glfwWindowShouldClose(window))
 	{
 
@@ -371,11 +387,15 @@ int main(int argc, char *argv[])
 				std::cout << "Time of detecting motion per frame is: " << double(t) / (CLOCKS_PER_SEC) << " seconds" << std::endl;
 			}
 
+			
 
 			Morphology_Operations(0, 0);///Morphological operations are done here;
 			//imshow("Difference Image", motionMap); ///This shows the difference between the current and previous frames, but after the background template is 
 			///captured the difference is computed between the current frame and the frame with just the background.
-
+			
+			crosshairCorner = handSimpleCrosshairControl(motionMapMorph, frameSmall, crosshairMap);
+			imshow(window_crosshair_map_name, crosshairMap);
+			
 			/// INTERFACE OF FRAME-CAPTURING 
 			/**
 			* k == -1 (the program invites the user to capture the video frame without his/her body)
@@ -421,6 +441,9 @@ int main(int argc, char *argv[])
 			cv::imshow("Difference Image", motionMap);
 			
 			cv::resize(motionMapMorph, motionMapMorph, Size(frame.size().width, frame.size().height));
+
+			
+
 			cv::findContours(motionMapMorph.clone(), contours, hierarchy, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_SIMPLE, Point(0, 0));///This functions finds the countours in
 			///the motion map after morpological											
 			///operations have been conducted upon it.
@@ -511,9 +534,6 @@ static void cursor_position_callback(GLFWwindow* window, double xpos, double ypo
 	Breakout.CursorPosition.y = ypos;
 	Breakout.CursorUpdate();
 }
-
-
-
 
 // OpenCV part #4
 Mat modelGaussianBackground(VideoCapture &capture, Mat &meanValue, char colorSpace, int resizeScale)
@@ -745,7 +765,70 @@ void Morphology_Operations(int, void*)
 
 	/// Apply the specified morphology operation
 	morphologyEx(motionMap, motionMapMorph, operation, element);
+}
 
+glm::vec2 handSimpleCrosshairControl(Mat& binaryMap, Mat& currentFrame, Mat& crosshairMap)
+{
+	Mat currentFrameHSV;
+	cvtColor(currentFrame, currentFrameHSV, CV_BGR2HSV);
+	int hue, saturation, value;
+	bool changeMinRow = 0, changeMaxRow = 0, changeMinCol = 0, changeMaxCol = 0;
+	glm::vec2 minRow = glm::vec2(binaryMap.rows,0), maxRow = glm::vec2(0,0), 
+		minCol = glm::vec2(0,binaryMap.cols), maxCol = glm::vec2(0,0);
+	static int meanRow, meanCol;
 
+	for (int i = 0; i < binaryMap.rows; i++)
+		for (int j = 0; j < binaryMap.cols; j++)
+		{
+			hue = 2*currentFrameHSV.at<Vec3b>(i, j)[0];
+			saturation = currentFrameHSV.at<Vec3b>(i, j)[1]*100/255.0;
+			value = currentFrameHSV.at<Vec3b>(i, j)[2] * 100 / 255.0;
+			if ((binaryMap.at<uchar>(i, j) == 255) && ((hue > 220) && (hue < 290) && (saturation > 60) && (value > 60)))
+			{
+				crosshairMap.at<Vec3b>(i, j)[0] = 255;
+				crosshairMap.at<Vec3b>(i, j)[1] = 0;
+				crosshairMap.at<Vec3b>(i, j)[2] = 0;
+
+				if (i<minRow.x)
+				{
+					minRow = glm::vec2(i,j);
+					changeMinRow = 1; 
+				}
+				if (i > maxRow.x)
+				{
+					maxRow = glm::vec2(i, j);
+					changeMaxRow = 1;
+				}
+
+				if (j < minCol.y)
+				{
+					minCol = glm::vec2(i, j);
+					changeMinCol = 1;
+				}
+
+				if (j > maxCol.y)
+				{
+					maxCol = glm::vec2(i, j);
+					changeMaxCol = 1;
+				}
+			}
+			else
+			{
+				crosshairMap.at<Vec3b>(i, j)[0] = 0;
+				crosshairMap.at<Vec3b>(i, j)[1] = 0;
+				crosshairMap.at<Vec3b>(i, j)[2] = 0;
+			}
+
+		}
+	if (changeMaxCol&&changeMaxRow&&changeMinCol&&changeMinRow)
+	{
+		meanRow = (minRow.x + maxRow.x) / 2;
+		meanCol = (minRow.y + maxRow.y) / 2;
+		crosshairMap.at<Vec3b>(meanRow, meanCol)[0] = 0;
+		crosshairMap.at<Vec3b>(meanRow, meanCol)[1] = 0;
+		crosshairMap.at<Vec3b>(meanRow, meanCol)[2] = 255;
+	}
+		
+	return glm::vec2(meanRow, meanCol);
 }
 // End of OpenCV part #4
