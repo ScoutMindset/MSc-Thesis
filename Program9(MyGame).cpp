@@ -8,6 +8,7 @@
 ** available on the following site http://learnopengl.com/#!In-Practice/2D-Game/Breakout
 ******************************************************************/
 #define GLEW_STATIC
+
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 
@@ -59,20 +60,30 @@ Mat motionMapMorph; /// Image variable that is the result of image detection aft
 
 ///OTHER GLOBAL VARIABLES
 int MAX_KERNEL_LENGTH = 10;
+int resizeScale = 4;
 char filter;
 char smoothing = 'o'; //default values are different from the pool of choices available to the user so that the menu "while" loop is executed
+static int currentCrosshairMeanRow = 0, currentCrosshairMeanCol = 0;
+static int currentTriggerMeanRowRed = 0, currentTriggerMeanColRed = 0;
+static int currentTriggerMeanRowGreen = 0, currentTriggerMeanColGreen = 0;
 
 // DeltaTime variables (those are made global so that they can be used in the Breakout's "Update" function
 GLfloat deltaTime = 0.0f;
 GLfloat lastFrame = 0.0f;
 
-Mat detectMotion(Mat& frame1, Mat& frame2, int threshold);//, char colorSpace);
+Mat detectMotion(Mat& frame1, Mat& frame2, int threshold, char update);//, char colorSpace);
 
 Mat modelGaussianBackground(VideoCapture &capture, Mat &meanValue, char colorSpace, int resizeScale);
 
 Mat detectMotionGaussian(Mat& currentFrame, Mat& meanValue, Mat& standardDeviation, int threshold, char colorSpace);
 
 glm::vec2 handSimpleCrosshairControl(Mat& binaryMap, Mat& currentFrame, Mat& crosshairMap);
+
+void handSimpleTriggerControl(Mat& binaryMap, Mat& currentFrame, Mat& triggerMap, glm::vec2& greenMean, glm::vec2& redMean);
+
+void LabelComponent(unsigned short* STACK, unsigned short width, unsigned short height, unsigned char* input, 
+	int* output, int labelNo, unsigned short x, unsigned short y);
+void LabelImage(unsigned short width, unsigned short height, unsigned char* input, int* output);
 
 void Morphology_Operations(int, void*);
 // OpenCV end of part #1
@@ -92,8 +103,8 @@ int main(int argc, char *argv[])
 	glGetError(); // Call it once to catch glewInit() bug, all other errors are now from our application.
 
 	glfwSetKeyCallback(window, key_callback);
-	glfwSetCursorPosCallback(window, cursor_position_callback);
-	glfwSetMouseButtonCallback(window, mouse_button_callback);
+	/*glfwSetCursorPosCallback(window, cursor_position_callback); //callbacks used to control the crosshair using the mouse
+	glfwSetMouseButtonCallback(window, mouse_button_callback);*/
 
 	// OpenGL configuration
 	glViewport(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
@@ -119,8 +130,9 @@ int main(int argc, char *argv[])
 	int delay = 0;
 	int k = -1;
 	int clockIterator = 0;
-	int resizeScale = 4;
 	int noBalls;
+	int triggerStatus = 0;
+	double triggerDistance;
 	
 
 	Mat frame, finalFrame; ///Current frame image variable.
@@ -133,12 +145,16 @@ int main(int argc, char *argv[])
 	Mat standardDeviationGray = Mat::zeros(SCREEN_HEIGHT / resizeScale, SCREEN_WIDTH / resizeScale, CV_32FC1);
 	Mat standardDeviationColor = Mat::zeros(SCREEN_HEIGHT / resizeScale, SCREEN_WIDTH / resizeScale, CV_32FC3);
 	Mat crosshairMap(1,1,CV_8UC3);
+	Mat triggerMap(1, 1, CV_8UC3);
+	Mat triggerMapLabelled(1, 1, CV_8UC3);
 
 	vector<vector<Point> > contours;
 	Scalar color(0, 0, 255);
 	vector<Vec4i> hierarchy;
 
 	glm::vec2 crosshairCorner = glm::vec2(0, 0);
+	glm::vec2 greenMean = glm::vec2(0, 0);
+	glm::vec2 redMean = glm::vec2(0, 0);
 
 	char bsMethod = 'a'; //default values are different from the pool of choices available to the user so that the menu "while" loop is executed
 	char colorSpace = 'p'; //default values are different from the pool of choices available to the user so that the menu "while" loop is executed
@@ -149,10 +165,12 @@ int main(int argc, char *argv[])
 
 	string window_morph_name = "Difference Image After Morphological Operations";
 	string window_crosshair_map_name = "Crosshair view";
+	string window_trigger_map_name = "Trigger view";
 
 	bool disablePlayerTemplate = 1;
 
-	signed char input;
+	unsigned char input;
+	unsigned char update;
 
 	/// INITIAL CAMERA OPERATIONS
 	namedWindow("Video");
@@ -174,6 +192,8 @@ int main(int argc, char *argv[])
 
 			std::cout << "Please specify if you want to apply smoothing: (y)es or (n)o." << std::endl;
 			std::cin >> smoothing;
+			std::cout << "Please specify if you want to update the background: (y)es or (n)o." << std::endl;
+			std::cin >> update;
 			//if ((smoothing == 'y') || (smoothing == 'Y'))
 			//{
 			//	std::cout << "Please specify which filter you want to apply to the current frame: (h)omogenous, (g)aussian, (m)edian or (b)ilateral." << std::endl;
@@ -192,6 +212,7 @@ int main(int argc, char *argv[])
 	
 	capture >> frame;
 	cv::resize(crosshairMap, crosshairMap, Size(frame.size().width , frame.size().height));
+	cv::resize(triggerMap, triggerMap, Size(frame.size().width, frame.size().height));
 	finalFrame = frame.clone();
 	Mat templateEmpty = Mat::zeros(frame.size(), CV_8UC3); /// This image variable contains the video frame WITHOUT the player's body.
 	cv::flip(frame, frame, 1); /// This function causes the mirror-like display of the video from the camera.
@@ -201,7 +222,7 @@ int main(int argc, char *argv[])
 
 	///SMOOTHING OF THE INITIAL FRAME
 	if (smoothing == 'n')
-		prevFrame = frame.clone(); /// The previous frame is initialized with the current variable before entering the while loop.
+		prevFrame = frameSmall.clone(); /// The previous frame is initialized with the current variable before entering the while loop.
 	else
 	{
 		if ((filter == 'H') || (filter == 'h'))
@@ -226,13 +247,15 @@ int main(int argc, char *argv[])
 		}
 	}
 
-
 	/// Create window 
 	namedWindow(window_morph_name, WINDOW_NORMAL);
 	cv::moveWindow(window_morph_name, 1250, 10);
 
 	namedWindow(window_crosshair_map_name, WINDOW_NORMAL);
-	cv::moveWindow(window_morph_name, 1250, 500);
+	cv::moveWindow(window_crosshair_map_name, 1250, 500);
+
+	namedWindow(window_trigger_map_name, WINDOW_NORMAL);
+	cv::moveWindow(window_trigger_map_name, 650, 500);
 
 	/// Create Trackbar to select Morphology operation
 	cv::createTrackbar("Operator:\n 0: Opening - 1: Closing  \n 2: Gradient - 3: Top Hat \n 4: Black Hat",
@@ -305,7 +328,7 @@ int main(int argc, char *argv[])
 		{
 			cv::flip(frame, frame, 1);
 			cv::resize(frame, frameSmall, Size(frame.size().width / resizeScale, frame.size().height / resizeScale));
-			if (smoothing == 'y')
+			if ((smoothing == 'y') || (smoothing == 'Y'))
 			{
 				t = clock();
 				///SMOOTHING OF THE CURRENT FRAME
@@ -346,7 +369,7 @@ int main(int argc, char *argv[])
 				t = clock();
 				if (bsMethod == 'c' || bsMethod == 'C')
 				{
-					motionMap = detectMotion(prevFrame, frameSmooth, threshold);// , colorSpace);
+					motionMap = detectMotion(prevFrame, frameSmooth, threshold,update);// , colorSpace);
 					if (k < 1)
 						prevFrame = frameSmooth.clone();/// Current frame is assigned as the previous frame for the next iteration of the 'while' loop.
 				}
@@ -368,7 +391,7 @@ int main(int argc, char *argv[])
 				t = clock();
 				if (bsMethod == 'c' || bsMethod == 'C')
 				{
-					motionMap = detectMotion(prevFrame, frameSmall, threshold);//, colorSpace);
+					motionMap = detectMotion(prevFrame, frameSmall, threshold,update);//, colorSpace);
 					if (k < 1)
 						prevFrame = frameSmall.clone();/// Current frame is assigned as the previous frame for the next iteration of the 'while' loop.
 				}
@@ -394,7 +417,24 @@ int main(int argc, char *argv[])
 			///captured the difference is computed between the current frame and the frame with just the background.
 			
 			crosshairCorner = handSimpleCrosshairControl(motionMapMorph, frameSmall, crosshairMap);
+			handSimpleTriggerControl(motionMapMorph, frameSmall, triggerMap,greenMean, redMean);
+			Breakout.CursorPosition.x = crosshairCorner.x;
+			Breakout.CursorPosition.y = crosshairCorner.y;
+			Breakout.CursorUpdate();
+			triggerDistance = glm::distance(greenMean, redMean);
+			
+			if (triggerDistance > 50)
+			{
+				triggerStatus = 1;
+			}
+				
+			else if ((triggerDistance < 40) && (glm::length(greenMean)) && (glm::length(redMean))&&triggerStatus)
+			{
+				Breakout.CheckCrosshair();
+				triggerStatus = 0;
+			}
 			imshow(window_crosshair_map_name, crosshairMap);
+			imshow(window_trigger_map_name, triggerMap);
 			
 			/// INTERFACE OF FRAME-CAPTURING 
 			/**
@@ -432,12 +472,15 @@ int main(int argc, char *argv[])
 					//else
 					//prevFrame = frame.clone(); ///The previous frame is constant from this point and is always equal to the empty background frame.
 					k = 1;
-					namedWindow("Empty template");
-					moveWindow("Empty template", 900, 10);
-					cv::imshow("Empty template", prevFrame);
+					
 				}
 			}
-
+			if (k == 1)
+			{
+				namedWindow("Empty template");
+				moveWindow("Empty template", 900, 10);
+				cv::imshow("Empty template", prevFrame);
+			}
 			cv::imshow("Difference Image", motionMap);
 			
 			cv::resize(motionMapMorph, motionMapMorph, Size(frame.size().width, frame.size().height));
@@ -688,15 +731,13 @@ Mat detectMotionGaussian(Mat& currentFrame, Mat& meanValue, Mat& standardDeviati
 	return motionMap;
 }
 
-Mat detectMotion(Mat& frame1, Mat& frame2, int threshold)//, char colorSpace)
+Mat detectMotion(Mat& frame1, Mat& frame2, int threshold, char update)//, char colorSpace)
 {
-	Mat  frame1Trans;
-	Mat  frame2Trans;
-	double a = 0.001;
+	double learningRate = 0.01, foregroundLearningRate = 0.01;
 	int rows = frame1.rows;
 	int cols = frame2.cols;
 	int channel[3];
-	int difference = 0, channels;
+	int difference = 0, channels = frame1.channels();
 
 	Mat motionMap(rows, cols, CV_8UC1); /// The difference image is initialized with the same amount of rows and columns as the function's frames.
 	/// 
@@ -716,9 +757,9 @@ Mat detectMotion(Mat& frame1, Mat& frame2, int threshold)//, char colorSpace)
 	//}
 	//else if ((colorSpace == 'r') || (colorSpace == 'R'))
 	//{
-		frame1Trans = frame1.clone();
-		frame2Trans = frame2.clone();
-		channels = 3;
+		/*frame1Trans = frame1.clone();
+		frame2Trans = frame2.clone();*/
+	//	channels = 3;
 	/*}*/
 
 	for (int i = 0; i < rows; i++)
@@ -730,9 +771,9 @@ Mat detectMotion(Mat& frame1, Mat& frame2, int threshold)//, char colorSpace)
 				/*difference += (frame2Trans.at<Vec3b>(i, j)[k] - frame1Trans.at<Vec3b>(i, j)[k]) *
 					(frame2Trans.at<Vec3b>(i, j)[k] - frame1Trans.at<Vec3b>(i, j)[k]);*/
 				if (channels >1)
-					difference += abs(frame2Trans.at<Vec3b>(i, j)[k] - frame1Trans.at<Vec3b>(i, j)[k]);
+					difference += abs(frame2.at<Vec3b>(i, j)[k] - frame1.at<Vec3b>(i, j)[k]);
 				else 
-					difference += abs(frame2Trans.at<uchar>(i, j) - frame1Trans.at<uchar>(i, j));
+					difference += abs(frame2.at<uchar>(i, j) - frame1.at<uchar>(i, j));
 			}
 			
 
@@ -741,14 +782,26 @@ Mat detectMotion(Mat& frame1, Mat& frame2, int threshold)//, char colorSpace)
 			if (difference / channels> threshold)
 			{
 				motionMap.at<uchar>(i, j) = 255;
+				if ((update == 'y') || (update == 'Y'))
+				{
+					frame1.at<Vec3b>(i, j)[0] = (1 - foregroundLearningRate*learningRate)*frame1.at<Vec3b>(i, j)[0] + foregroundLearningRate*learningRate*frame2.at<Vec3b>(i, j)[0];
+					frame1.at<Vec3b>(i, j)[1] = (1 - foregroundLearningRate*learningRate)*frame1.at<Vec3b>(i, j)[1] + foregroundLearningRate*learningRate*frame2.at<Vec3b>(i, j)[1];
+					frame1.at<Vec3b>(i, j)[2] = (1 - foregroundLearningRate*learningRate)*frame1.at<Vec3b>(i, j)[2] + foregroundLearningRate*learningRate*frame2.at<Vec3b>(i, j)[2];
+				}
+				
 			}
 			else
 			{
-				motionMap.at<uchar>(i, j) = 0;
-				/*frame1.at<Vec3b>(i, j)[0] = 0.99*frame1.at<Vec3b>(i, j)[0] + 0.01*frame2.at<Vec3b>(i, j)[0];
-				frame1.at<Vec3b>(i, j)[1] = 0.99*frame1.at<Vec3b>(i, j)[1] + 0.01*frame2.at<Vec3b>(i, j)[1];
-				frame1.at<Vec3b>(i, j)[2] = 0.99*frame1.at<Vec3b>(i, j)[2] + 0.01*frame2.at<Vec3b>(i, j)[2];*/
+motionMap.at<uchar>(i, j) = 0;
+if ((update == 'y') || (update == 'Y'))
+{
+	frame1.at<Vec3b>(i, j)[0] = (1 - learningRate)*frame1.at<Vec3b>(i, j)[0] + learningRate*frame2.at<Vec3b>(i, j)[0];
+	frame1.at<Vec3b>(i, j)[1] = (1 - learningRate)*frame1.at<Vec3b>(i, j)[1] + learningRate*frame2.at<Vec3b>(i, j)[1];
+	frame1.at<Vec3b>(i, j)[2] = (1 - learningRate)*frame1.at<Vec3b>(i, j)[2] + learningRate*frame2.at<Vec3b>(i, j)[2];
+}
+
 			}
+
 			difference = 0;
 		}
 	}
@@ -772,63 +825,219 @@ glm::vec2 handSimpleCrosshairControl(Mat& binaryMap, Mat& currentFrame, Mat& cro
 	Mat currentFrameHSV;
 	cvtColor(currentFrame, currentFrameHSV, CV_BGR2HSV);
 	int hue, saturation, value;
+	int sensitivity = 2;
 	bool changeMinRow = 0, changeMaxRow = 0, changeMinCol = 0, changeMaxCol = 0;
-	glm::vec2 minRow = glm::vec2(binaryMap.rows,0), maxRow = glm::vec2(0,0), 
-		minCol = glm::vec2(0,binaryMap.cols), maxCol = glm::vec2(0,0);
-	static int meanRow, meanCol;
+	glm::vec2 minRow = glm::vec2(binaryMap.rows, 0), maxRow = glm::vec2(0, 0),
+		minCol = glm::vec2(0, binaryMap.cols), maxCol = glm::vec2(0, 0);
+	int meanRow = 0, meanCol = 0, prevMeanRow, prevMeanCol, pixelCounter = 0;
+
 
 	for (int i = 0; i < binaryMap.rows; i++)
 		for (int j = 0; j < binaryMap.cols; j++)
 		{
-			hue = 2*currentFrameHSV.at<Vec3b>(i, j)[0];
-			saturation = currentFrameHSV.at<Vec3b>(i, j)[1]*100/255.0;
+ 		hue = 2 * currentFrameHSV.at<Vec3b>(i, j)[0];
+		saturation = currentFrameHSV.at<Vec3b>(i, j)[1] * 100 / 255.0;
+		value = currentFrameHSV.at<Vec3b>(i, j)[2] * 100 / 255.0;
+		//if ((binaryMap.at<uchar>(i, j) == 255) && (value > 90))
+		//if ((binaryMap.at<uchar>(i, j) == 255) && ((hue > 230) && (hue < 280) && (saturation > 60) && (value >60)))//Red
+		if ((binaryMap.at<uchar>(i, j) == 255) && ((hue > 45) && (hue < 70) ) && (saturation > 70) && (value >50))//Yellow
+		{
+			crosshairMap.at<Vec3b>(i, j)[0] = 0;
+			crosshairMap.at<Vec3b>(i, j)[1] = 246;
+			crosshairMap.at<Vec3b>(i, j)[2] = 255;
+
+			meanRow += i;
+			meanCol += j;
+			pixelCounter++;
+		}
+		else if ((i != meanCol) && (j != meanCol))
+		{
+			crosshairMap.at<Vec3b>(i, j)[0] = 0;
+			crosshairMap.at<Vec3b>(i, j)[1] = 0;
+			crosshairMap.at<Vec3b>(i, j)[2] = 0;
+		}
+
+		}
+
+	if (pixelCounter > 0)
+	{
+		meanRow = meanRow*resizeScale / pixelCounter;
+		meanCol = meanCol*resizeScale / pixelCounter;
+		if ((abs(meanRow - currentCrosshairMeanRow) > sensitivity) && (abs(meanCol - currentCrosshairMeanCol) > sensitivity))
+		{
+			currentCrosshairMeanRow = meanRow;
+			currentCrosshairMeanCol = meanCol;
+			crosshairMap.at<Vec3b>(currentCrosshairMeanRow / resizeScale, currentCrosshairMeanCol / resizeScale)[0] = 0;
+			crosshairMap.at<Vec3b>(currentCrosshairMeanRow / resizeScale, currentCrosshairMeanCol / resizeScale)[1] = 0;
+			crosshairMap.at<Vec3b>(currentCrosshairMeanRow / resizeScale, currentCrosshairMeanCol / resizeScale)[2] = 255;
+		}
+		
+		return glm::vec2(currentCrosshairMeanCol-25, currentCrosshairMeanRow-25-100);
+	}
+	else
+		return glm::vec2(currentCrosshairMeanCol - 25, currentCrosshairMeanRow - 25 - 100);
+	
+}
+
+void handSimpleTriggerControl(Mat& binaryMap, Mat& currentFrame, Mat& triggerMap, glm::vec2& greenMean, glm::vec2& redMean)
+{
+	Mat currentFrameHSV;
+	cvtColor(currentFrame, currentFrameHSV, CV_BGR2HSV);
+	int hue, saturation, value;
+	int sensitivity = 2;
+	bool changeMinRow = 0, changeMaxRow = 0, changeMinCol = 0, changeMaxCol = 0;
+	glm::vec2 minRow = glm::vec2(binaryMap.rows, 0), maxRow = glm::vec2(0, 0),
+		minCol = glm::vec2(0, binaryMap.cols), maxCol = glm::vec2(0, 0);
+	int meanRowRed = 0, meanColRed = 0, pixelCounterRed = 0;
+	int meanRowGreen = 0, meanColGreen = 0, pixelCounterGreen = 0;
+
+
+	for (int i = 0; i < binaryMap.rows; i++)
+		for (int j = 0; j < binaryMap.cols; j++)
+		{
+			hue = 2 * currentFrameHSV.at<Vec3b>(i, j)[0];
+			saturation = currentFrameHSV.at<Vec3b>(i, j)[1] * 100 / 255.0;
 			value = currentFrameHSV.at<Vec3b>(i, j)[2] * 100 / 255.0;
-			if ((binaryMap.at<uchar>(i, j) == 255) && ((hue > 220) && (hue < 290) && (saturation > 60) && (value > 60)))
+			//RED
+			if ( (binaryMap.at<uchar>(i, j) == 255) && 
+				(((hue > 345) && (hue <= 360)) || ((hue >= 0) && (hue < 15))) 
+				&& ((saturation > 65) && (value > 50)) )//Red
+
+			//if ((binaryMap.at<uchar>(i, j) == 255) && ((hue > 10) && (hue < 45) && (saturation > 40) && (value >40))) //Orange
 			{
-				crosshairMap.at<Vec3b>(i, j)[0] = 255;
-				crosshairMap.at<Vec3b>(i, j)[1] = 0;
-				crosshairMap.at<Vec3b>(i, j)[2] = 0;
-
-				if (i<minRow.x)
-				{
-					minRow = glm::vec2(i,j);
-					changeMinRow = 1; 
-				}
-				if (i > maxRow.x)
-				{
-					maxRow = glm::vec2(i, j);
-					changeMaxRow = 1;
-				}
-
-				if (j < minCol.y)
-				{
-					minCol = glm::vec2(i, j);
-					changeMinCol = 1;
-				}
-
-				if (j > maxCol.y)
-				{
-					maxCol = glm::vec2(i, j);
-					changeMaxCol = 1;
-				}
+				triggerMap.at<Vec3b>(i, j)[0] = 0;
+				triggerMap.at<Vec3b>(i, j)[1] = 0;
+				triggerMap.at<Vec3b>(i, j)[2] = 255;
+				meanRowRed += i;
+				meanColRed += j;
+				pixelCounterRed++;
 			}
-			else
+			//GREEN
+			else if ((binaryMap.at<uchar>(i, j) == 255) && ((hue > 85) && (hue < 130) && (saturation > 55) && (value >50)))
 			{
-				crosshairMap.at<Vec3b>(i, j)[0] = 0;
-				crosshairMap.at<Vec3b>(i, j)[1] = 0;
-				crosshairMap.at<Vec3b>(i, j)[2] = 0;
+				triggerMap.at<Vec3b>(i, j)[0] = 0;
+				triggerMap.at<Vec3b>(i, j)[1] = 255;
+				triggerMap.at<Vec3b>(i, j)[2] = 0;
+
+				meanRowGreen += i;
+				meanColGreen += j;
+				pixelCounterGreen++;
+			}
+			else if ((i != meanColGreen) && (j != meanColGreen))
+			{
+				triggerMap.at<Vec3b>(i, j)[0] = 0;
+				triggerMap.at<Vec3b>(i, j)[1] = 0;
+				triggerMap.at<Vec3b>(i, j)[2] = 0;
 			}
 
 		}
-	if (changeMaxCol&&changeMaxRow&&changeMinCol&&changeMinRow)
+
+	if (pixelCounterGreen > 0)
 	{
-		meanRow = (minRow.x + maxRow.x) / 2;
-		meanCol = (minRow.y + maxRow.y) / 2;
-		crosshairMap.at<Vec3b>(meanRow, meanCol)[0] = 0;
-		crosshairMap.at<Vec3b>(meanRow, meanCol)[1] = 0;
-		crosshairMap.at<Vec3b>(meanRow, meanCol)[2] = 255;
+		meanRowGreen = meanRowGreen*resizeScale / pixelCounterGreen;
+		meanColGreen = meanColGreen*resizeScale / pixelCounterGreen;
+		if ((abs(meanRowGreen - currentTriggerMeanRowGreen) > sensitivity) && (abs(meanColGreen - currentTriggerMeanColGreen) > sensitivity))
+		{
+			currentTriggerMeanRowGreen = meanRowGreen;
+			currentTriggerMeanColGreen = meanColGreen;
+			triggerMap.at<Vec3b>(currentTriggerMeanRowGreen / resizeScale, currentTriggerMeanColGreen / resizeScale)[0] = 0;
+			triggerMap.at<Vec3b>(currentTriggerMeanRowGreen / resizeScale, currentTriggerMeanColGreen / resizeScale)[1] = 0;
+			triggerMap.at<Vec3b>(currentTriggerMeanRowGreen / resizeScale, currentTriggerMeanColGreen / resizeScale)[2] = 255;
+		}
+
+		greenMean = glm::vec2(currentTriggerMeanColGreen, currentTriggerMeanRowGreen);
 	}
-		
-	return glm::vec2(meanRow, meanCol);
+	else
+		greenMean = glm::vec2(currentTriggerMeanColGreen, currentTriggerMeanRowGreen);
+
+
+	if (pixelCounterRed > 0)
+	{
+		meanRowRed = meanRowRed*resizeScale / pixelCounterRed;
+		meanColRed = meanColRed*resizeScale / pixelCounterRed;
+		if ((abs(meanRowRed - currentTriggerMeanRowRed) > sensitivity) && (abs(meanColRed - currentTriggerMeanColRed) > sensitivity))
+		{
+			currentTriggerMeanRowRed = meanRowRed;
+			currentTriggerMeanColRed = meanColRed;
+			triggerMap.at<Vec3b>(currentTriggerMeanRowRed / resizeScale, currentTriggerMeanColRed / resizeScale)[0] = 0;
+			triggerMap.at<Vec3b>(currentTriggerMeanRowRed / resizeScale, currentTriggerMeanColRed / resizeScale)[1] = 255;
+			triggerMap.at<Vec3b>(currentTriggerMeanRowRed / resizeScale, currentTriggerMeanColRed / resizeScale)[2] = 0;
+		}
+
+		redMean = glm::vec2(currentTriggerMeanColRed, currentTriggerMeanRowRed);
+	}
+	else
+		redMean = glm::vec2(currentTriggerMeanColRed, currentTriggerMeanRowRed);
+
 }
+
 // End of OpenCV part #4
+
+
+#define CALL_LabelComponent(x,y,returnLabel) { STACK[SP] = x; STACK[SP+1] = y; STACK[SP+2] = returnLabel; SP += 3; goto START; }
+#define RETURN { SP -= 3;                \
+                 switch (STACK[SP+2])    \
+				                  {                       \
+                 case 1 : goto RETURN1;  \
+                 case 2 : goto RETURN2;  \
+                 case 3 : goto RETURN3;  \
+                 case 4 : goto RETURN4;  \
+                 default: return;        \
+				                  }                       \
+			                  }
+#define X (STACK[SP-3])
+#define Y (STACK[SP-2])
+
+void LabelComponent(unsigned short* STACK, unsigned short width, unsigned short height, 
+	unsigned char* input, int* output, int labelNo, unsigned short x, unsigned short y)
+{
+		STACK[0] = x;
+		STACK[1] = y;
+		STACK[2] = 0;  /* return - component is labelled */
+		int SP = 3;
+		int index;
+
+	START: /* Recursive routine starts here */
+
+		index = X + width*Y;
+		if (input[index] == 0) RETURN;   /* This pixel is not part of a component */
+		if (output[index] != 0) RETURN;   /* This pixel has already been labelled  */
+		output[index] = labelNo;
+
+		if (X > 0) CALL_LabelComponent(X - 1, Y, 1);   /* left  pixel */
+	RETURN1:
+
+		if (X < width - 1) CALL_LabelComponent(X + 1, Y, 2);   /* rigth pixel */
+	RETURN2:
+
+		if (Y > 0) CALL_LabelComponent(X, Y - 1, 3);   /* upper pixel */
+	RETURN3:
+
+		if (Y < height - 1) CALL_LabelComponent(X, Y + 1, 4);   /* lower pixel */
+	RETURN4:
+
+		RETURN;
+	}
+
+
+void LabelImage(unsigned short width, unsigned short height, unsigned char* input, int* output)
+	{
+		unsigned short* STACK = (unsigned short*)malloc(3 * sizeof(unsigned short)*(width*height + 1));
+
+		int labelNo = 0;
+		int index = -1;
+		for (unsigned short y = 0; y < height; y++)
+		{
+			for (unsigned short x = 0; x < width; x++)
+			{
+				index++;
+				if (input[index] == 0) continue;   /* This pixel is not part of a component */
+				if (output[index] != 0) continue;   /* This pixel has already been labelled  */
+				/* New component found */
+				labelNo++;
+				LabelComponent(STACK, width, height, input, output, labelNo, x, y);
+			}
+		}
+
+		free(STACK);
+	}

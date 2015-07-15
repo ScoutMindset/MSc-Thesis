@@ -53,6 +53,8 @@ public:
 
 	// GameLoop
 	void CheckCrosshair();
+	void ActivateCrosshair();
+	void DisactivateCrosshair();
 	void CursorUpdate();
 	void DoCollisions();
 	void ProcessInput(GLfloat dt);

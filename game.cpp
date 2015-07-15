@@ -87,7 +87,7 @@ void Game::Init()
 	ResourceManager::GetShader("sprite").SetMatrix4("projection", projection);
 	// Load textures
 	ResourceManager::LoadFileTexture("textures/awesomeface.png", GL_TRUE, "face");
-	ResourceManager::LoadFileTexture("textures/crosshair.png", GL_TRUE, "crosshair");
+	ResourceManager::LoadFileTexture("textures/crosshairDisactive.png", GL_TRUE, "crosshair");
 	// Set render-specific controls
 	Renderer = new SpriteRenderer(ResourceManager::GetShader("sprite"));
 	// Configure game objects
@@ -178,28 +178,6 @@ void Game::Render(cv::Mat &frame)
 	}
 }
 
-//Collision CheckCollision(BallObject &one, GameObject &two)
-//{
-//	// Rectangular collisions
-//	/*bool collisionX = (one.Position.x + one.Size.x >= two.Position.x) && (two.Position.x + two.Size.x >= one.Position.x);
-//	bool collisionY = (one.Position.y + one.Size.y >= two.Position.y) && (two.Position.y + two.Size.y >= one.Position.y);
-//	return (collisionX && collisionY);*/
-//
-//	// Circular collisions
-//	glm::vec2 ball_center(one.Position + one.Radius);
-//	glm::vec2 half_extents(two.Size.x / 2, two.Size.y / 2);
-//	glm::vec2 rectangle_center(two.Position.x + half_extents.x, two.Position.y + half_extents.y);
-//
-//	glm::vec2 difference = ball_center - rectangle_center;
-//	glm::vec2 clamped = glm::clamp(difference, -half_extents, half_extents);
-//	glm::vec2 closest = rectangle_center + clamped;
-//	difference = closest - ball_center;
-//	if (glm::length(difference) <= one.Radius)
-//		return std::make_tuple(GL_TRUE, VectorDirection(difference), difference);
-//	else
-//		return std::make_tuple(GL_FALSE, UP, glm::vec2(0.0f, 0.0f));
-//}
-
 void Game::DoCollisions()//cv::Mat &frame)
 {
 	glm::vec2 bBall_center, cBall_center;// = Ball->Position + Ball->Radius;
@@ -212,135 +190,60 @@ void Game::DoCollisions()//cv::Mat &frame)
 	GLint center_distanceX, center_distanceY, ball_distanceX, ball_distanceY;
 	
 	int i, j;
-	//cv::namedWindow("Collision");
-	//for (i = Ball->Position.x; i <= Ball->Position.x + 2 * ball_radius; i++)
-	//{
-	//	for (j = Ball->Position.y; j <= Ball->Position.y + 2 * ball_radius; j++)
-	//	{
-	//		//if ((i == Ball->Position.x) && (j == Ball->Position.y))
-	//		//{
-	//		//	currentFrame.at<cv::Vec3b>(j, i)[0] = 255;
-	//		//	currentFrame.at<cv::Vec3b>(j, i)[1] = 255;
-	//		//	currentFrame.at<cv::Vec3b>(j, i)[2] = 0;
-	//		//}
-	//		center_distanceX = (ball_center.x - i);
-	//		center_distanceY = (ball_center.y - j);
-	//		
-	//		if (sqrt(center_distanceX*center_distanceX + center_distanceY*center_distanceY) <= ball_radius)
-	//		{
-	//			//currentFrame.at<cv::Vec3b>(j, i)[0] = 255;
-	//			//currentFrame.at<cv::Vec3b>(j, i)[1] = 0;
-	//			//currentFrame.at<cv::Vec3b>(j, i)[2] = 0;
-	//			if (playerFrame.at<uchar>(j, i) == 255)
-	//			{
 
-	//				velocity += glm::vec2(center_distanceX, center_distanceY);
-	//				Ball->Stuck = GL_FALSE;
-	//			}
-	//		}
-	//	}
-	//}
-	//if (glm::length(velocity) > 0)
-	//{
-	//	Ball->Velocity = glm::vec2(glm::length(INITIAL_BALL_VELOCITY)*velocity.x / (abs(velocity.x) + abs(velocity.y)),
-	//		glm::length(INITIAL_BALL_VELOCITY)*velocity.y / (abs(velocity.x) + abs(velocity.y)));
-	//	Ball->Position.x += Ball->Radius* velocity.x / (abs(velocity.x) + abs(velocity.y));
-	//	Ball->Position.y += Ball->Radius* velocity.y / (abs(velocity.x) + abs(velocity.y));
-	//	//cv::imshow("Collision", this->playerFrame);
-	//}
-
-	//for (std::vector<BallObject>::iterator b = Balls.begin(); b != Balls.end(); b++)
-	//{
-	//	velocity = glm::vec2(0, 0);
-	//	ball_center = b->Position + b->Radius;
-	//	ball_radius = b->Radius;
-	//	current_velocity_length = glm::length(b->Velocity);
-	//	for (i = b->Position.x; i <= b->Position.x + 2 * ball_radius; i++)
-	//	{
-	//		for (j = b->Position.y; j <= b->Position.y + 2 * ball_radius; j++)
-	//		{
-	//			//if ((i == Ball->Position.x) && (j == Ball->Position.y))
-	//			//{
-	//			//	currentFrame.at<cv::Vec3b>(j, i)[0] = 255;
-	//			//	currentFrame.at<cv::Vec3b>(j, i)[1] = 255;
-	//			//	currentFrame.at<cv::Vec3b>(j, i)[2] = 0;
-	//			//}
-	//			center_distanceX = (ball_center.x - i);
-	//			center_distanceY = (ball_center.y - j);
-
-	//			if (sqrt(center_distanceX*center_distanceX + center_distanceY*center_distanceY) <= ball_radius)
-	//			{
-	//				//currentFrame.at<cv::Vec3b>(j, i)[0] = 255;
-	//				//currentFrame.at<cv::Vec3b>(j, i)[1] = 0;
-	//				//currentFrame.at<cv::Vec3b>(j, i)[2] = 0;
-	//				if (playerFrame.at<uchar>(j, i) == 255)
-	//				{
-
-	//					velocity += glm::vec2(center_distanceX, center_distanceY);
-	//					b->Stuck = GL_FALSE;
-	//				}
-	//			}
-	//		}
-	//	}
-	//	if (glm::length(velocity) > 0)
-	//	{
-	//		b->Velocity = glm::vec2(glm::length(INITIAL_BALL_VELOCITY)*velocity.x / (abs(velocity.x) + abs(velocity.y)),
-	//			glm::length(INITIAL_BALL_VELOCITY)*velocity.y / (abs(velocity.x) + abs(velocity.y)));
-	//		b->Position.x += b->Radius* velocity.x / (abs(velocity.x) + abs(velocity.y));
-	//		b->Position.y += b->Radius* velocity.y / (abs(velocity.x) + abs(velocity.y));
-	//		//cv::imshow("Collision", this->playerFrame);
-	//	}
-	//}
 	for (std::vector<BallObject>::iterator b = Balls.begin(); b != Balls.end(); b++)
 	{
-		bBall_center = b->Position + b->Radius;
-		bBall_radius = b->Radius;
-		velocity = glm::vec2(0, 0);
-		current_velocity_length = glm::length(b->Velocity);
-		for (std::vector<BallObject>::iterator c = Balls.begin(); c != Balls.end(); c++)
+		if (!b->Destroyed)
 		{
-			cBall_center = c->Position + c->Radius;
-			cBall_radius = c->Radius;
-			if (b != c)
-			{	
-				for (i = b->Position.x; i <= b->Position.x + 2 * bBall_radius; i++)
+			bBall_center = b->Position + b->Radius;
+			bBall_radius = b->Radius;
+			velocity = glm::vec2(0, 0);
+			current_velocity_length = glm::length(b->Velocity);
+			for (std::vector<BallObject>::iterator c = Balls.begin(); c != Balls.end(); c++)
+			{
+				if (!c->Destroyed)
 				{
-					for (j = b->Position.y; j <= b->Position.y + 2 * bBall_radius; j++)
+					cBall_center = c->Position + c->Radius;
+					cBall_radius = c->Radius;
+					if (b != c)
 					{
-						//if ((i == Ball->Position.x) && (j == Ball->Position.y))
-						//{
-						//	currentFrame.at<cv::Vec3b>(j, i)[0] = 255;
-						//	currentFrame.at<cv::Vec3b>(j, i)[1] = 255;
-						//	currentFrame.at<cv::Vec3b>(j, i)[2] = 0;
-						//}
-						center_distanceX = (bBall_center.x - i);
-						center_distanceY = (bBall_center.y - j);
-
-						if (sqrt(center_distanceX*center_distanceX + center_distanceY*center_distanceY) <= bBall_radius)
+						for (i = b->Position.x; i <= b->Position.x + 2 * bBall_radius; i++)
 						{
-							//currentFrame.at<cv::Vec3b>(j, i)[0] = 255;
-							//currentFrame.at<cv::Vec3b>(j, i)[1] = 0;
-							//currentFrame.at<cv::Vec3b>(j, i)[2] = 0;
-							ball_distanceX = (cBall_center.x - i);
-							ball_distanceY = (cBall_center.y - j);
-
-							if ((playerFrame.at<uchar>(j, i) == 255)||
-								(sqrt(ball_distanceX*ball_distanceX + ball_distanceY*ball_distanceY) <= cBall_radius))
+							for (j = b->Position.y; j <= b->Position.y + 2 * bBall_radius; j++)
 							{
+								//if ((i == Ball->Position.x) && (j == Ball->Position.y))
+								//{
+								//	currentFrame.at<cv::Vec3b>(j, i)[0] = 255;
+								//	currentFrame.at<cv::Vec3b>(j, i)[1] = 255;
+								//	currentFrame.at<cv::Vec3b>(j, i)[2] = 0;
+								//}
+								center_distanceX = (bBall_center.x - i);
+								center_distanceY = (bBall_center.y - j);
 
-								velocity += glm::vec2(center_distanceX, center_distanceY);
-								b->Stuck = GL_FALSE;
+								if (sqrt(center_distanceX*center_distanceX + center_distanceY*center_distanceY) <= bBall_radius)
+								{
+									//currentFrame.at<cv::Vec3b>(j, i)[0] = 255;
+									//currentFrame.at<cv::Vec3b>(j, i)[1] = 0;
+									//currentFrame.at<cv::Vec3b>(j, i)[2] = 0;
+									ball_distanceX = (cBall_center.x - i);
+									ball_distanceY = (cBall_center.y - j);
+
+									if ((playerFrame.at<uchar>(j, i) == 255) ||
+										(sqrt(ball_distanceX*ball_distanceX + ball_distanceY*ball_distanceY) <= cBall_radius))
+									{
+
+										velocity += glm::vec2(center_distanceX, center_distanceY);
+										b->Stuck = GL_FALSE;
+									}
+								}
 							}
 						}
+						if (glm::length(velocity) > 0)
+						{
+							b->Velocity = glm::vec2(glm::length(INITIAL_BALL_VELOCITY)*velocity.x / (abs(velocity.x) + abs(velocity.y)),
+								glm::length(INITIAL_BALL_VELOCITY)*velocity.y / (abs(velocity.x) + abs(velocity.y)));
+						}
 					}
-				}
-				if (glm::length(velocity) > 0)
-				{
-					b->Velocity = glm::vec2(glm::length(INITIAL_BALL_VELOCITY)*velocity.x / (abs(velocity.x) + abs(velocity.y)),
-						glm::length(INITIAL_BALL_VELOCITY)*velocity.y / (abs(velocity.x) + abs(velocity.y)));
-					/*b->Position.x += b->Radius* velocity.x / (abs(velocity.x) + abs(velocity.y));
-					b->Position.y += b->Radius* velocity.y / (abs(velocity.x) + abs(velocity.y));*/
-					//cv::imshow("Collision", this->playerFrame);
 				}
 			}
 		}
@@ -352,11 +255,6 @@ void Game::CheckCrosshair()
 {
 	for (std::vector<BallObject>::iterator i = Balls.begin(); i != Balls.end(); i++)
 	{
-		/*if ((i->Position.x > Crosshair->Position.x) && (i->Position.x<Crosshair->Position.x + Crosshair->Size.x)
-			&& (i->Position.y > Crosshair->Position.y) && (i->Position.y < Crosshair->Position.y + Crosshair->Size.y))
-		{
-			i->Destroyed = GL_TRUE;
-		}*/
 		if ( ((i->Position.x > Crosshair->Position.x) && (i->Position.x<Crosshair->Position.x + Crosshair->Size.x)
 			&& (i->Position.y > Crosshair->Position.y) && (i->Position.y < Crosshair->Position.y + Crosshair->Size.y))||
 
@@ -372,4 +270,14 @@ void Game::CheckCrosshair()
 			i->Destroyed = GL_TRUE;
 		}
 	}
+}
+
+void Game::ActivateCrosshair()
+{
+	ResourceManager::LoadFileTexture("textures/crosshairActive.png", GL_TRUE, "crosshair");
+}
+
+void Game::DisactivateCrosshair()
+{
+	ResourceManager::LoadFileTexture("textures/crosshairDisactive.png", GL_TRUE, "crosshair");
 }
