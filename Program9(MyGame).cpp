@@ -578,6 +578,8 @@ static void cursor_position_callback(GLFWwindow* window, double xpos, double ypo
 	Breakout.CursorUpdate();
 }
 
+
+
 // OpenCV part #4
 Mat modelGaussianBackground(VideoCapture &capture, Mat &meanValue, char colorSpace, int resizeScale)
 {
